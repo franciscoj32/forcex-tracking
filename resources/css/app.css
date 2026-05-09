@@ -1,0 +1,201 @@
+@import 'flatpickr/dist/flatpickr.min.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply bg-slate-100 text-slate-900 antialiased;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+}
+
+@layer components {
+    .fx-card {
+        @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+    }
+
+    .fx-card-header {
+        @apply flex items-center justify-between border-b border-slate-200 px-6 py-4;
+    }
+
+    .fx-card-body {
+        @apply p-6;
+    }
+
+    .fx-btn-primary {
+        @apply inline-flex items-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500;
+    }
+
+    .fx-btn-secondary {
+        @apply inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50;
+    }
+
+    .fx-btn-danger {
+        @apply inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500;
+    }
+
+    .fx-input,
+    .fx-select,
+    .fx-textarea {
+        @apply mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-100;
+    }
+
+    .fx-combobox {
+        @apply relative w-full min-w-0;
+    }
+
+    .fx-combobox-trigger {
+        @apply mt-0 flex h-[46px] w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 text-left text-sm text-slate-900 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-cyan-100;
+    }
+
+    .fx-combobox-trigger[data-open='true'] {
+        @apply border-cyan-500 ring-2 ring-cyan-100;
+    }
+
+    .fx-combobox-trigger-label {
+        @apply min-w-0 truncate;
+    }
+
+    .fx-combobox-panel {
+        @apply absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.16)];
+    }
+
+    .fx-combobox-search {
+        @apply border-b border-slate-100 p-3;
+    }
+
+    .fx-combobox-search-input {
+        @apply w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-100;
+    }
+
+    .fx-combobox-list {
+        @apply max-h-72 overflow-y-auto p-2;
+    }
+
+    .fx-combobox-option {
+        @apply flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 transition hover:bg-slate-50;
+    }
+
+    .fx-combobox-option[data-active='true'] {
+        @apply bg-cyan-50 text-cyan-800;
+    }
+
+    .fx-combobox-option[data-selected='true'] {
+        @apply bg-emerald-50 font-semibold text-emerald-700;
+    }
+
+    .fx-combobox-empty {
+        @apply px-3 py-4 text-sm text-slate-500;
+    }
+
+    .fx-autocomplete {
+        @apply relative w-full min-w-0;
+    }
+
+    .fx-autocomplete-input {
+        @apply mt-0 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-100;
+    }
+
+    .fx-autocomplete-panel {
+        @apply absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.16)];
+    }
+
+    .fx-date-field {
+        @apply space-y-1;
+    }
+
+    .fx-date-wrapper {
+        @apply relative;
+    }
+
+    .fx-date-input {
+        @apply absolute inset-0 h-full w-full opacity-0 pointer-events-none;
+    }
+
+    .fx-date-alt-input {
+        @apply mt-0 pr-11;
+    }
+
+    .fx-date-icon {
+        @apply pointer-events-none absolute inset-y-0 right-3 my-auto h-4 w-4 text-slate-400;
+    }
+
+    .flatpickr-calendar {
+        @apply rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)];
+    }
+
+    .flatpickr-months {
+        @apply rounded-t-2xl bg-slate-950 text-white;
+    }
+
+    .flatpickr-current-month,
+    .flatpickr-monthDropdown-months,
+    .numInputWrapper span.arrowUp,
+    .numInputWrapper span.arrowDown,
+    .flatpickr-weekday,
+    .flatpickr-prev-month,
+    .flatpickr-next-month {
+        @apply text-white;
+    }
+
+    .flatpickr-weekdays {
+        @apply bg-slate-950;
+    }
+
+    .flatpickr-day.selected,
+    .flatpickr-day.startRange,
+    .flatpickr-day.endRange,
+    .flatpickr-day.selected:hover,
+    .flatpickr-day.startRange:hover,
+    .flatpickr-day.endRange:hover {
+        @apply border-cyan-600 bg-cyan-600 text-white;
+    }
+
+    .flatpickr-day.today {
+        @apply border-emerald-400 text-emerald-700;
+    }
+
+    .flatpickr-time input:hover,
+    .flatpickr-time .flatpickr-am-pm:hover,
+    .flatpickr-time input:focus,
+    .flatpickr-time .flatpickr-am-pm:focus {
+        @apply bg-cyan-50;
+    }
+
+    .fx-label {
+        @apply text-sm font-semibold text-slate-700;
+    }
+
+    .fx-table {
+        @apply min-w-full divide-y divide-slate-200 text-sm;
+    }
+
+    .fx-th {
+        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+    }
+
+    .fx-td {
+        @apply px-4 py-3 align-top text-slate-700;
+    }
+
+    .fx-badge {
+        @apply inline-flex rounded-full px-2.5 py-1 text-xs font-semibold;
+    }
+
+    .fx-tab {
+        @apply inline-flex items-center rounded-t-2xl border border-b-0 border-transparent px-5 py-3 text-sm font-semibold text-slate-500 transition;
+    }
+
+    .fx-tab-active {
+        @apply border-slate-200 bg-white text-cyan-700;
+    }
+
+    .fx-status-dot {
+        @apply h-3.5 w-3.5 rounded-full ring-4 ring-white;
+    }
+}
