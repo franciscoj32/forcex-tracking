@@ -281,7 +281,7 @@
                                 <div class="flex justify-end">
                                     <a
                                         href="{{ route('embarques.show', $shipment) }}"
-                                        class="inline-flex items-center rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-500"
+                                        class="inline-flex min-h-[42px] min-w-[76px] items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500"
                                     >
                                         Ver
                                     </a>
