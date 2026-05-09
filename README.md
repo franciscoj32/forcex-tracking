@@ -104,6 +104,16 @@ DB_PASSWORD=tu_password
 - Deben verse estilos cargados desde `public/build`.
 - El enlace `public/storage` debe existir.
 
+## Deploy rapido en hosting
+
+Desde el clon del repositorio en el hosting:
+
+```bash
+bash deploy.sh
+```
+
+El script hace `git pull`, publica `deployment/gsc-business.com-package/root/` en `gsc-business.com`, publica `deployment/gsc-business.com-package/tracking-forcex-app/` en `tracking-forcex-app`, corre `composer install`, `php artisan migrate --force` y `php artisan optimize:clear`.
+
 ## Documentacion funcional
 
 - Arquitectura de datos: [docs/arquitectura-datos-tracking.md](C:/laragon/www/tracking-forcex/docs/arquitectura-datos-tracking.md:1)
