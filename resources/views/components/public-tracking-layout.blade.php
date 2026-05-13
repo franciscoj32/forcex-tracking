@@ -45,7 +45,7 @@
             }
         </style>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-        <link rel="stylesheet" href="{{ asset('vendor/flag-icons/css/flag-icons.min.css') }}">
+        <link rel="stylesheet" href="{{ asset('flags/flag-icons/css/flag-icons.min.css') }}">
     </head>
     <body class="guest-body">
         <div class="guest-shell">

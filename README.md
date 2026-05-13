@@ -113,6 +113,7 @@ bash deploy.sh
 ```
 
 El script hace `git pull`, publica `deployment/gsc-business.com-package/root/` en `gsc-business.com`, publica `deployment/gsc-business.com-package/tracking-forcex-app/` en `tracking-forcex-app`, corre `composer install`, `php artisan migrate --force` y `php artisan optimize:clear`.
+Tambien sincroniza `public/vendor/flag-icons/` hacia `gsc-business.com/flags/flag-icons/` y deja permisos `755` en carpetas y `644` en archivos para que el tracking publico cargue las banderas.
 
 ## Documentacion funcional
 

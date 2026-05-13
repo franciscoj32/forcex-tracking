@@ -173,7 +173,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button type="submit" class="inline-flex h-[46px] min-w-[132px] shrink-0 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500">
+                                <button type="submit" class="inline-flex h-[46px] min-w-[132px] shrink-0 items-center justify-center rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700">
                                     Filtrar
                                 </button>
                                 @if ($search !== '' || $selectedClientId !== '' || $selectedLifecycle !== 'all')
@@ -281,8 +281,11 @@
                                 <div class="flex justify-end">
                                     <a
                                         href="{{ route('embarques.show', $shipment) }}"
-                                        class="inline-flex min-h-[42px] min-w-[76px] items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500"
+                                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-500"
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4">
+                                            <path d="M12 5c5.23 0 9.23 3.11 10.82 6.54a1.1 1.1 0 0 1 0 .92C21.23 15.89 17.23 19 12 19S2.77 15.89 1.18 12.46a1.1 1.1 0 0 1 0-.92C2.77 8.11 6.77 5 12 5Zm0 2C7.93 7 4.72 9.32 3.22 12 4.72 14.68 7.93 17 12 17s7.28-2.32 8.78-5C19.28 9.32 16.07 7 12 7Zm0 1.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/>
+                                        </svg>
                                         Ver
                                     </a>
                                 </div>

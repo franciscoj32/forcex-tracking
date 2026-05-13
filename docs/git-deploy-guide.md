@@ -42,6 +42,8 @@ bash deploy.sh
 
 - Hace `git pull origin main`
 - Copia la carpeta publica a `/home/penguin2/gsc-business.com`
+- Publica `public/vendor/flag-icons/` en `/home/penguin2/gsc-business.com/flags/flag-icons/`
+- Aplica permisos `755` a carpetas de `flags/` y `644` a sus archivos
 - Copia la app a `/home/penguin2/tracking-forcex-app`
 - Conserva `.env`, `.env.hosting`, `storage/` y `vendor/`
 - Ejecuta `composer install`
