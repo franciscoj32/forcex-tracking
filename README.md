@@ -112,9 +112,13 @@ Desde el clon del repositorio en el hosting:
 bash deploy.sh
 ```
 
-El script hace `git pull`, publica `deployment/gsc-business.com-package/root/` en `gsc-business.com`, publica `deployment/gsc-business.com-package/tracking-forcex-app/` en `tracking-forcex-app`, corre `composer install`, `php artisan migrate --force` y `php artisan optimize:clear`.
-Tambien sincroniza `public/vendor/flag-icons/` hacia `gsc-business.com/flags/flag-icons/` y deja permisos `755` en carpetas y `644` en archivos para que el tracking publico cargue las banderas.
+El script hace `git pull`, copia la app a `tracking-forcex-app` y `public/` a `gsc-business.com` (con el `index.php` de `deployment/gsc-business.com-package/root/`), corre `composer install --no-dev`, las migraciones y `php artisan optimize`. No toca `.env` ni `storage/`.
+
+Antes de cada commit corre `npm run build`: `public/build` se sube al repositorio porque el hosting no tiene Node.
+
+Pasos completos, primera vez, `.env` y cron: [docs/git-deploy-guide.md](docs/git-deploy-guide.md).
 
 ## Documentacion funcional
 
-- Arquitectura de datos: [docs/arquitectura-datos-tracking.md](C:/laragon/www/tracking-forcex/docs/arquitectura-datos-tracking.md:1)
+- **Qué hace el sistema (actualizado):** [docs/resumen-del-sistema.md](docs/resumen-del-sistema.md)
+- Arquitectura de datos (versión anterior, sin finanzas ni alertas): [docs/arquitectura-datos-tracking.md](docs/arquitectura-datos-tracking.md)

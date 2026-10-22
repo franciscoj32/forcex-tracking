@@ -1,33 +1,10 @@
-Deploy de FORCE X Tracking para hosting compartido
+Carpeta publica del hosting (gsc-business.com)
 
-Estructura objetivo en el servidor:
+Aqui solo quedan los dos archivos propios del hosting:
+- index.php: arranca la app desde ../tracking-forcex-app y usa esta carpeta como "public".
+- .htaccess: reglas de Laravel.
 
-1. Subir el contenido de `root/` a:
-   /home/penguin2/gsc-business.com
+Todo lo demas (build/, images/, flags/, favicon, robots) lo copia deploy.sh desde
+public/ del repositorio. La app la copia deploy.sh desde la raiz del repositorio.
 
-2. Subir la carpeta `tracking-forcex-app/` completa a:
-   /home/penguin2/tracking-forcex-app
-
-3. Dentro de `/home/penguin2/tracking-forcex-app`:
-   - renombrar `.env.hosting` a `.env`
-   - revisar si `DB_HOST=localhost` aplica en tu hosting
-
-4. Si tienes acceso a terminal en el hosting, ejecutar:
-   php artisan migrate --force
-   php artisan storage:link
-   php artisan optimize:clear
-   php artisan optimize
-
-5. Permisos recomendados:
-   - `storage/` con escritura
-   - `bootstrap/cache/` con escritura
-   - `flags/flag-icons/` con carpetas `755` y archivos `644`
-
-Notas:
-- El `index.php` de `root/` ya apunta a `../tracking-forcex-app`.
-- El proyecto ya incluye `vendor/` y `public/build/`, asi que no necesitas correr `composer install` ni `npm run build` para levantarlo.
-- El tracking publico carga banderas desde `/flags/flag-icons/`.
-- Si el hosting no permite `storage:link`, la carga de logos/branding publico necesitara un enlace simbolico manual desde:
-  /home/penguin2/gsc-business.com/storage
-  hacia
-  /home/penguin2/tracking-forcex-app/storage/app/public
+Ver docs/git-deploy-guide.md para los pasos completos.
