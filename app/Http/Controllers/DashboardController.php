@@ -5,109 +5,99 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\Shipment;
 use App\Models\User;
+use App\Services\ActionInbox;
+use App\Services\Alerts\AlertBoard;
+use App\Services\Alerts\AlertDetector;
+use App\Services\Alerts\AlertThresholds;
+use App\Services\ManagementMetrics;
 use Illuminate\Contracts\View\View;
 
+/**
+ * Inicio: responde "¿que tengo que hacer hoy?".
+ *
+ * - Bloque "Alertas": plazos detectados por el sistema (App\Services\Alerts).
+ * - Todos los internos: bandeja "Requiere tu accion" (App\Services\ActionInbox).
+ * - Admin y Comercial: ademas, los numeros del mes (mismo calculo que Reportes).
+ */
 class DashboardController extends Controller
 {
-    public function __invoke(): View
+    public function __invoke(ActionInbox $inbox, ManagementMetrics $metrics): View
     {
         $user = auth()->user();
-        $today = now()->startOfDay();
 
         if ($user->role === User::ROLE_CLIENTE) {
-            $shipments = Shipment::query()
-                ->with('client')
-                ->where('client_id', $user->client_id)
-                ->latest()
-                ->get();
-
-            return view('dashboard', [
-                'mode' => 'cliente',
-                'activeShipments' => $shipments->where('estado_actual', '!=', 'Finalizado')->take(6),
-                'latestStatus' => $shipments->take(5),
-                'upcomingArrivals' => $shipments
-                    ->filter(fn (Shipment $shipment) => $shipment->fecha_eta && $shipment->fecha_eta->gte($today))
-                    ->sortBy('fecha_eta')
-                    ->take(5),
-                'recentDocuments' => Document::with('shipment')
-                    ->whereHas('shipment', fn ($query) => $query->where('client_id', $user->client_id))
-                    ->latest()
-                    ->take(6)
-                    ->get(),
-            ]);
+            return $this->clientDashboard($user);
         }
 
-        $summary = Shipment::query()
-            ->selectRaw('COUNT(*) as total_shipments')
-            ->selectRaw("SUM(CASE WHEN estado_actual = 'En transito' THEN 1 ELSE 0 END) as in_transit")
-            ->selectRaw("SUM(CASE WHEN estado_actual IN ('Arribo a puerto', 'Descarga', 'Ingreso a almacen') THEN 1 ELSE 0 END) as arrived")
-            ->selectRaw("SUM(CASE WHEN estado_actual = 'Finalizado' THEN 1 ELSE 0 END) as finished")
-            ->selectRaw('SUM(CASE WHEN fecha_eta BETWEEN ? AND ? THEN 1 ELSE 0 END) as upcoming_eta', [
-                $today->toDateString(),
-                $today->copy()->addDays(7)->toDateString(),
-            ])
-            ->first();
-
-        $assignedShipmentsFeed = $user->assignedShipments()
-            ->with([
-                'client',
-                'events' => fn ($query) => $query->latest('fecha')->take(1),
-            ])
-            ->wherePivot('alerts_enabled', true)
-            ->orderByRaw('CASE WHEN shipments.fecha_eta IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('shipments.fecha_eta')
-            ->orderByDesc('shipments.updated_at')
-            ->get()
-            ->unique('id')
-            ->values();
-
-        $recentEventThreshold = $today->copy()->subDays(4);
-        $arrivalWindowEnd = $today->copy()->addDays(3)->endOfDay();
-
-        $assignedActiveShipments = $assignedShipmentsFeed
-            ->filter(fn (Shipment $shipment) => $shipment->estado_actual !== 'Finalizado')
-            ->take(6)
-            ->values();
-
-        $statusAlerts = $assignedShipmentsFeed
-            ->filter(function (Shipment $shipment) use ($recentEventThreshold) {
-                $latestEvent = $shipment->events->first();
-
-                return $latestEvent?->fecha && $latestEvent->fecha->gte($recentEventThreshold);
-            })
-            ->sortByDesc(fn (Shipment $shipment) => $shipment->events->first()?->fecha?->getTimestamp() ?? 0)
-            ->take(5)
-            ->values();
-
-        $arrivalAlerts = $assignedShipmentsFeed
-            ->filter(function (Shipment $shipment) use ($today, $arrivalWindowEnd, $recentEventThreshold) {
-                $hasUpcomingEta = $shipment->fecha_eta
-                    && $shipment->fecha_eta->between($today, $arrivalWindowEnd)
-                    && ! in_array($shipment->estado_actual, ['Entregado', 'Finalizado'], true);
-
-                $latestEvent = $shipment->events->first();
-                $hasRecentArrival = in_array($shipment->estado_actual, ['Arribo a puerto', 'Descarga', 'Ingreso a almacen'], true)
-                    && $latestEvent?->fecha
-                    && $latestEvent->fecha->gte($recentEventThreshold);
-
-                return $hasUpcomingEta || $hasRecentArrival;
-            })
-            ->sortBy(fn (Shipment $shipment) => $shipment->fecha_eta?->getTimestamp() ?? PHP_INT_MAX)
-            ->take(5)
-            ->values();
+        // Las RO vinculadas se cargan una vez: alimentan las tareas y las alertas.
+        $shipments = $inbox->shipmentsFor($user);
+        $limits = AlertThresholds::fromSettings();
 
         return view('dashboard', [
-            'mode' => 'interno',
-            'totalShipments' => (int) ($summary?->total_shipments ?? 0),
-            'inTransit' => (int) ($summary?->in_transit ?? 0),
-            'arrived' => (int) ($summary?->arrived ?? 0),
-            'finished' => (int) ($summary?->finished ?? 0),
-            'upcomingEta' => (int) ($summary?->upcoming_eta ?? 0),
-            'assignedActiveShipments' => $assignedActiveShipments,
-            'statusAlerts' => $statusAlerts,
-            'arrivalAlerts' => $arrivalAlerts,
-            'recentMovements' => Shipment::with(['client', 'events' => fn ($query) => $query->latest('fecha')->take(1)])
-                ->latest('updated_at')
+            'inbox' => $inbox->for($user, $shipments),
+            'alerts' => (new AlertBoard(new AlertDetector($limits), $limits))->for($user, $shipments),
+            'alertLimits' => $limits,
+            'month' => $this->monthPanel($user, $metrics, request('mes')),
+        ]);
+    }
+
+    /** Numeros del mes para Admin (toda la empresa) y Comercial (sus RO). */
+    private function monthPanel(User $user, ManagementMetrics $metrics, ?string $month): ?array
+    {
+        if (! $user->isAdmin() && ! $user->isComercial()) {
+            return null;
+        }
+
+        $period = $metrics->period($month);
+
+        // El Admin ve tambien la tendencia de 6 meses: se cargan una sola vez
+        // y el mes elegido sale de ese mismo grupo.
+        $trendShipments = $user->isAdmin()
+            ? $metrics->shipmentsBetween(ManagementMetrics::trendStart($period['end']), $period['end']->copy()->endOfMonth())
+            : null;
+        $shipments = $trendShipments
+            ? $trendShipments->filter(fn ($shipment) => ManagementMetrics::isInPeriod($shipment, $period['start'], $period['end']))->values()
+            : $metrics->shipmentsBetween($period['start'], $period['end']);
+        $ranking = $metrics->commercialRanking($shipments);
+        $scope = $user->isAdmin() ? $shipments : $shipments->where('comercial_id', $user->id);
+
+        return [
+            'type' => $user->isAdmin() ? 'admin' : 'comercial',
+            'period' => $period,
+            'months' => $this->monthOptions(),
+            'counts' => $metrics->countsByType($scope),
+            'totals' => $metrics->financialTotals($scope),
+            'delayed' => $metrics->delayedCount($user->isAdmin() ? null : $user),
+            'ranking' => $user->isAdmin() ? $ranking : collect(),
+            'position' => $ranking->firstWhere('user_id', $user->id)['position'] ?? null,
+            'rankingSize' => $ranking->count(),
+            'trend' => $trendShipments ? $metrics->monthlyTrend($period['end'], shipments: $trendShipments) : collect(),
+        ];
+    }
+
+    /** Ultimos 12 meses para el selector. */
+    private function monthOptions(): array
+    {
+        return collect(range(0, 11))
+            ->map(fn (int $offset) => now()->startOfMonth()->subMonths($offset))
+            ->mapWithKeys(fn ($month) => [$month->format('Y-m') => ucfirst($month->translatedFormat('F Y'))])
+            ->all();
+    }
+
+    /** Portal del cliente (hoy sin login; se conserva para cuando se habilite). */
+    private function clientDashboard(User $user): View
+    {
+        $shipments = Shipment::query()
+            ->with('client')
+            ->where('client_id', $user->client_id)
+            ->latest()
+            ->get();
+
+        return view('dashboard-client', [
+            'activeShipments' => $shipments->where('estado_actual', '!=', 'Finalizado')->values(),
+            'recentDocuments' => Document::with('shipment')
+                ->whereHas('shipment', fn ($query) => $query->where('client_id', $user->client_id))
+                ->latest()
                 ->take(6)
                 ->get(),
         ]);

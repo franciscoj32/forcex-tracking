@@ -110,9 +110,16 @@ class ShipmentPinningTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertHeader('Content-Type', 'application/vnd.ms-excel; charset=UTF-8');
-        $response->assertSee('OT-EXPORT-OK');
-        $response->assertDontSee('OT-EXPORT-NO');
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        // El archivo es un .xlsx real: se abre y se revisa su contenido.
+        $path = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($path, $response->streamedContent());
+        $content = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->toArray())->flatten()->filter()->implode(' ');
+        unlink($path);
+
+        $this->assertStringContainsString('OT-EXPORT-OK', $content);
+        $this->assertStringNotContainsString('OT-EXPORT-NO', $content);
         $this->assertNotSame($targetShipment->client_id, $otherShipment->client_id);
     }
 

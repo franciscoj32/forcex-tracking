@@ -15,7 +15,7 @@ class UserController extends Controller
     {
         return view('users.index', [
             'users' => User::query()
-                ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
+                ->whereIn('role', User::INTERNAL_ROLES)
                 ->latest()
                 ->paginate(12),
         ]);
@@ -88,12 +88,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'min:3', 'max:50', 'alpha_dash', Rule::unique('users', 'username')->ignore($user)],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
-            'role' => ['required', Rule::in([
-                User::ROLE_ADMIN,
-                User::ROLE_OPERACIONES,
-                User::ROLE_COMERCIAL,
-                User::ROLE_CLIENTE,
-            ])],
+            'role' => ['required', Rule::in(User::ROLES)],
             'estado' => ['required', 'in:activo,inactivo'],
             'client_id' => [
                 Rule::requiredIf(fn () => $request->input('role') === User::ROLE_CLIENTE),
@@ -114,11 +109,7 @@ class UserController extends Controller
 
     private function internalRoles(): array
     {
-        return [
-            User::ROLE_ADMIN,
-            User::ROLE_OPERACIONES,
-            User::ROLE_COMERCIAL,
-        ];
+        return User::INTERNAL_ROLES;
     }
 
     private function ensureManagedUser(User $user): void

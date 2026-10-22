@@ -25,15 +25,16 @@ class TrackingCodeTest extends TestCase
     public function test_public_tracking_page_shows_shipment_status_by_tracking_code(): void
     {
         $shipment = $this->createShipment();
-        ShipmentEvent::create([
-            'shipment_id' => $shipment->id,
-            'estado' => 'En transito',
-            'fecha' => now(),
-            'descripcion' => 'Carga rumbo a Callao.',
-            'user_id' => User::factory()->create([
-                'role' => User::ROLE_OPERACIONES,
-            ])->id,
+        $operator = User::factory()->create([
+            'role' => User::ROLE_OPERACIONES,
         ]);
+
+        // Hito: el cliente ve el texto estandar, no la descripcion interna.
+        ShipmentEvent::recordState($shipment, 'En transito', now(), 'Detalle interno: transbordo en Balboa.', $operator->id);
+        // Bitacora interna: nunca visible.
+        ShipmentEvent::recordAudit($shipment, 'Ficha actualizada: ETA.', $operator->id);
+        // Nota del Customer: visible.
+        ShipmentEvent::recordClientNote($shipment, 'Carga rumbo a Callao.', $operator->id);
 
         $response = $this->get(route('tracking.public', ['code' => strtolower($shipment->tracking_code)]));
 
@@ -41,7 +42,10 @@ class TrackingCodeTest extends TestCase
         $response->assertSee($shipment->tracking_code);
         $response->assertSee($shipment->nro_orden_trabajo);
         $response->assertSee('En transito');
+        $response->assertSee(Shipment::clientStateText('En transito'));
         $response->assertSee('Carga rumbo a Callao.');
+        $response->assertDontSee('Detalle interno: transbordo en Balboa.');
+        $response->assertDontSee('Ficha actualizada');
         $response->assertDontSee('Facturacion');
         $response->assertDontSee('Repositorio documental');
     }
@@ -82,6 +86,24 @@ class TrackingCodeTest extends TestCase
         $this->assertSame('sg', Shipment::countryCodeFor('Singapur'));
         $this->assertSame('sg', Shipment::countryCodeFor('Singapore'));
         $this->assertNull(Shipment::countryCodeFor('Zona Franca'));
+    }
+
+    public function test_shipment_resolves_flags_from_country_fields_and_not_from_ports_or_cities_alone(): void
+    {
+        $shipment = $this->createShipment([
+            'origen' => 'Shanghai',
+            'puerto_carga' => 'Shanghai',
+            'puerto_descarga' => 'Callao',
+            'destino_final' => 'Lima',
+        ]);
+
+        $this->assertNull($shipment->originCountryCode());
+        $this->assertNull($shipment->destinationCountryCode());
+        $this->assertNull(Shipment::countryCodeForCountryField('Shanghai'));
+        $this->assertNull(Shipment::countryCodeForCountryField('Callao'));
+        $this->assertNull(Shipment::countryCodeForCountryField('Lima'));
+        $this->assertSame('pe', Shipment::countryCodeForCountryField('Lima, Peru'));
+        $this->assertSame('cn', Shipment::countryCodeForCountryField('China'));
     }
 
     public function test_shipment_builds_document_checklist_with_required_and_recommended_items(): void
@@ -156,36 +178,20 @@ class TrackingCodeTest extends TestCase
             ->assertSee('digo');
     }
 
-    public function test_internal_roles_see_tracking_code_in_shipments_index(): void
+    public function test_internal_roles_find_shipments_by_tracking_code_in_index(): void
     {
+        // El codigo ya no ocupa una columna del listado (se ve en la ficha),
+        // pero se puede buscar por el.
         $shipment = $this->createShipment();
-        $admin = User::factory()->create([
-            'role' => User::ROLE_ADMIN,
-        ]);
-        $operator = User::factory()->create([
-            'role' => User::ROLE_OPERACIONES,
-        ]);
-        $commercial = User::factory()->create([
-            'role' => User::ROLE_COMERCIAL,
-        ]);
+        $this->createShipment(['nro_orden_trabajo' => 'OT-OTRO-CODIGO', 'routing_order' => 'RO-OTRO', 'bl' => 'BL-OTRO']);
 
-        $this->actingAs($admin)
-            ->get(route('embarques.index'))
-            ->assertOk()
-            ->assertSee('Seguimiento')
-            ->assertSee($shipment->tracking_code);
-
-        $this->actingAs($operator)
-            ->get(route('embarques.index'))
-            ->assertOk()
-            ->assertSee('Seguimiento')
-            ->assertSee($shipment->tracking_code);
-
-        $this->actingAs($commercial)
-            ->get(route('embarques.index'))
-            ->assertOk()
-            ->assertSee('Seguimiento')
-            ->assertSee($shipment->tracking_code);
+        foreach ([User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]))
+                ->get(route('embarques.index', ['q' => $shipment->tracking_code]))
+                ->assertOk()
+                ->assertSee($shipment->nro_orden_trabajo)
+                ->assertDontSee('OT-OTRO-CODIGO');
+        }
     }
 
     private function createShipment(array $overrides = []): Shipment

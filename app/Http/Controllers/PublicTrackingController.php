@@ -12,10 +12,9 @@ class PublicTrackingController extends Controller
     {
         $code = strtoupper(trim((string) $request->query('code', '')));
         $shipment = null;
-        $trackingAvailable = Shipment::hasTrackingCodeColumn();
 
-        if ($trackingAvailable && $code !== '') {
-            $shipment = Shipment::with(['events.user', 'client'])
+        if ($code !== '') {
+            $shipment = Shipment::with(['clientVisibleEvents', 'containers:id,shipment_id,numero', 'customerService:id,name,email'])
                 ->where('tracking_code', $code)
                 ->first();
         }
@@ -24,7 +23,6 @@ class PublicTrackingController extends Controller
             'code' => $code,
             'shipment' => $shipment,
             'searched' => $code !== '',
-            'trackingAvailable' => $trackingAvailable,
         ]);
     }
 }

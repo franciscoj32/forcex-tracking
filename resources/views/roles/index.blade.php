@@ -1,175 +1,82 @@
 @php
+    // Refleja App\Policies, los Gates de AppServiceProvider y App\Support\ShipmentFieldAccess.
+    $roleColumns = \App\Models\User::ROLE_LABELS;
+
     $roleMatrix = [
-        [
-            'module' => 'Usuarios internos',
-            'admin' => 'Crear, editar, activar e inactivar.',
-            'operaciones' => 'No.',
-            'comercial' => 'No.',
-            'cliente' => 'No.',
-        ],
-        [
-            'module' => 'Clientes',
-            'admin' => 'Crear, editar y consultar.',
-            'operaciones' => 'Consulta.',
-            'comercial' => 'Consulta.',
-            'cliente' => 'No.',
-        ],
-        [
-            'module' => 'Embarques',
-            'admin' => 'Control total.',
-            'operaciones' => 'Crear, editar y operar cualquier embarque.',
-            'comercial' => 'Consulta.',
-            'cliente' => 'Solo sus embarques.',
-        ],
-        [
-            'module' => 'Tracking y estados',
-            'admin' => 'Registrar y corregir.',
-            'operaciones' => 'Registrar eventos y mover estados.',
-            'comercial' => 'Consulta.',
-            'cliente' => 'Consulta propia.',
-        ],
-        [
-            'module' => 'Documentos',
-            'admin' => 'Subir, descargar y eliminar.',
-            'operaciones' => 'Subir, descargar y eliminar.',
-            'comercial' => 'Consulta y descarga interna.',
-            'cliente' => 'Descarga propia.',
-        ],
-        [
-            'module' => 'Facturacion',
-            'admin' => 'Gestion completa.',
-            'operaciones' => 'Gestion operativa.',
-            'comercial' => 'Consulta.',
-            'cliente' => 'No.',
-        ],
-        [
-            'module' => 'Provisiones',
-            'admin' => 'Gestion completa.',
-            'operaciones' => 'Gestion operativa.',
-            'comercial' => 'Consulta.',
-            'cliente' => 'No.',
-        ],
-        [
-            'module' => 'Codigo publico de rastreo',
-            'admin' => 'Ver y compartir.',
-            'operaciones' => 'Ver y compartir.',
-            'comercial' => 'Ver y compartir.',
-            'cliente' => 'Usa su pagina publica.',
-        ],
-        [
-            'module' => 'Usuarios vinculados a embarque',
-            'admin' => 'Asignar responsables y seguimiento.',
-            'operaciones' => 'Asignar responsables y seguimiento.',
-            'comercial' => 'No.',
-            'cliente' => 'No.',
-        ],
-        [
-            'module' => 'Endoso',
-            'admin' => 'Puede supervisar o asumir.',
-            'operaciones' => 'Puede ser responsable de endoso.',
-            'comercial' => 'No debe asumir endoso.',
-            'cliente' => 'No.',
-        ],
+        ['module' => 'Usuarios internos', 'admin' => 'Crear, editar, activar e inactivar.', 'comercial' => 'No.', 'customer' => 'No.', 'operaciones' => 'No.', 'cliente' => 'No.'],
+        ['module' => 'Clientes', 'admin' => 'Control total. Aprueba o rechaza y valida el crédito.', 'comercial' => 'Registra clientes (quedan pendientes) y corrige los suyos solo hasta su aprobación.', 'customer' => 'Consulta y mantiene contactos.', 'operaciones' => 'Consulta.', 'cliente' => 'No.'],
+        ['module' => 'Crear RO', 'admin' => 'Control total.', 'comercial' => 'Solo para clientes aprobados; elige al Customer.', 'customer' => 'No.', 'operaciones' => 'No.', 'cliente' => 'No.'],
+        ['module' => 'Datos comerciales (cliente, incoterm, Customer)', 'admin' => 'Control total.', 'comercial' => 'Solo sus RO y solo en "Creación Routing Order".', 'customer' => 'Consulta.', 'operaciones' => 'Consulta.', 'cliente' => 'No.'],
+        ['module' => 'Condición de crédito del embarque', 'admin' => 'Hereda del cliente o la fuerza por embarque.', 'comercial' => 'Consulta (heredada).', 'customer' => 'Consulta.', 'operaciones' => 'Consulta.', 'cliente' => 'No.'],
+        ['module' => 'Datos operativos (BL, naviera, fechas, pesos)', 'admin' => 'Control total.', 'comercial' => 'Consulta.', 'customer' => 'Consulta.', 'operaciones' => 'Edita: es dueño de estos datos.', 'cliente' => 'No.'],
+        ['module' => 'Asignar operador', 'admin' => 'Control total.', 'comercial' => 'No.', 'customer' => 'Asigna al operador.', 'operaciones' => 'Consulta.', 'cliente' => 'No.'],
+        ['module' => 'Tracking y estados', 'admin' => 'Registra estados.', 'comercial' => 'Consulta.', 'customer' => 'Registra estados.', 'operaciones' => 'Registra estados.', 'cliente' => 'Usa su pagina publica.'],
+        ['module' => 'Documentos', 'admin' => 'Sube, descarga y elimina.', 'comercial' => 'Consulta y descarga.', 'customer' => 'Sube, descarga y elimina.', 'operaciones' => 'Sube, descarga y elimina.', 'cliente' => 'No.'],
+        ['module' => 'Provisiones (costos)', 'admin' => 'Gestión completa.', 'comercial' => 'No.', 'customer' => 'Consulta.', 'operaciones' => 'Gestión operativa.', 'cliente' => 'No.'],
+        ['module' => 'Facturación', 'admin' => 'Gestión completa.', 'comercial' => 'Consulta.', 'customer' => 'Consulta.', 'operaciones' => 'Gestión operativa.', 'cliente' => 'No.'],
+        ['module' => 'Margen y reportes financieros', 'admin' => 'Toda la empresa.', 'comercial' => 'Solo sus RO.', 'customer' => 'No.', 'operaciones' => 'No.', 'cliente' => 'No.'],
+        ['module' => 'Código público de rastreo', 'admin' => 'Ver y compartir.', 'comercial' => 'Ver y compartir.', 'customer' => 'Ver y compartir.', 'operaciones' => 'Ver y compartir.', 'cliente' => 'Usa su pagina publica.'],
     ];
 
-    $permissionTone = function (string $value): string {
-        $normalized = strtolower($value);
+    // Nivel de cada permiso: edita / limitado / consulta / sin acceso.
+    $level = function (string $value): string {
+        $normalized = mb_strtolower($value);
 
         return match (true) {
-            str_contains($normalized, 'no') => 'border-slate-200 bg-slate-100 text-slate-600',
-            str_contains($normalized, 'control total'), str_contains($normalized, 'gestion completa'), str_contains($normalized, 'crear, editar'), str_contains($normalized, 'subir, descargar y eliminar') => 'border-cyan-200 bg-cyan-50 text-cyan-700',
-            str_contains($normalized, 'consulta'), str_contains($normalized, 'ver y compartir'), str_contains($normalized, 'descarga propia') => 'border-emerald-200 bg-emerald-50 text-emerald-700',
-            str_contains($normalized, 'solo'), str_contains($normalized, 'usa su pagina publica') => 'border-amber-200 bg-amber-50 text-amber-700',
-            default => 'border-blue-200 bg-blue-50 text-blue-700',
+            $normalized === 'no.' => 'none',
+            str_starts_with($normalized, 'consulta') && ! str_contains($normalized, 'mantiene'), str_contains($normalized, 'ver y compartir') => 'read',
+            str_contains($normalized, 'solo'), str_contains($normalized, 'usa su pagina publica') => 'partial',
+            default => 'full',
         };
     };
+    $levels = [
+        'full' => ['symbol' => '●', 'class' => 'text-accent-600', 'label' => 'Edita'],
+        'partial' => ['symbol' => '◐', 'class' => 'text-amber-500', 'label' => 'Limitado'],
+        'read' => ['symbol' => '○', 'class' => 'text-brand-500', 'label' => 'Consulta'],
+        'none' => ['symbol' => '—', 'class' => 'text-slate-300', 'label' => 'Sin acceso'],
+    ];
 @endphp
 
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-slate-900">Roles del sistema</h1>
-        <p class="text-sm text-slate-500">Consulta rapida de permisos y alcance por tipo de usuario.</p>
+        <h1>Permisos por rol</h1>
     </x-slot>
 
-    <div class="space-y-6">
-        <section class="fx-card overflow-hidden">
-            <div class="border-b border-slate-200 bg-slate-50 p-6">
-                <div>
-                    <h2 class="text-lg font-semibold text-slate-900">Resumen general</h2>
-                    <p class="mt-1 text-sm text-slate-500">Matriz base para explicar que puede hacer cada rol dentro del sistema.</p>
-                </div>
+    <div class="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
+        @foreach ($levels as $item)
+            <span class="inline-flex items-center gap-1.5"><span class="{{ $item['class'] }}">{{ $item['symbol'] }}</span>{{ $item['label'] }}</span>
+        @endforeach
+        <span class="text-slate-500">· El cliente no tiene acceso al sistema: consulta su carga con el código de rastreo.</span>
+    </div>
 
-                <div class="mt-4 flex flex-wrap gap-3">
-                    <div class="w-[180px] rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-100/70">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Roles internos</p>
-                        <div class="mt-2 flex items-end justify-between gap-3">
-                            <p class="text-3xl font-semibold leading-none text-slate-900">3</p>
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">Activos</span>
-                        </div>
-                    </div>
-                    <div class="w-[180px] rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-100/70">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Modulos clave</p>
-                        <div class="mt-2 flex items-end justify-between gap-3">
-                            <p class="text-3xl font-semibold leading-none text-slate-900">{{ count($roleMatrix) }}</p>
-                            <span class="rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700">Matriz</span>
-                        </div>
-                    </div>
-                    <div class="w-[180px] rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-100/70">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Cliente</p>
-                        <div class="mt-2 space-y-1">
-                            <p class="text-sm font-semibold leading-5 text-slate-900">Acceso solo propio</p>
-                            <p class="text-xs text-slate-500">Sin vista global</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm shadow-slate-100/70">
-            <div class="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
-                <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-900">Tabla de roles</h2>
-                        <p class="mt-1 text-sm text-slate-500">Permisos visibles por modulo y por perfil de usuario.</p>
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs font-semibold">
-                        <span class="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-cyan-700">Control</span>
-                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">Consulta</span>
-                        <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">Limitado</span>
-                        <span class="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-slate-600">Sin acceso</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="overflow-x-auto px-4 py-4">
-                <table class="min-w-[980px] w-full border-separate border-spacing-y-3">
-                    <thead>
-                        <tr>
-                            <th class="px-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Modulo</th>
-                            <th class="px-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Admin</th>
-                            <th class="px-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Operaciones</th>
-                            <th class="px-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Comercial</th>
-                            <th class="px-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cliente</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($roleMatrix as $row)
-                            <tr>
-                                <td class="rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-4 py-4 align-top">
-                                    <p class="text-sm font-semibold text-slate-900">{{ $row['module'] }}</p>
-                                </td>
-                                @foreach (['admin', 'operaciones', 'comercial', 'cliente'] as $column)
-                                    <td class="{{ $loop->last ? 'rounded-r-2xl' : '' }} border {{ $loop->last ? '' : 'border-r-0' }} border-slate-200 bg-white px-4 py-4 align-top">
-                                        <span class="inline-flex rounded-2xl border px-3 py-2 text-sm font-medium leading-6 {{ $permissionTone($row[$column]) }}">
-                                            {{ $row[$column] }}
-                                        </span>
-                                    </td>
-                                @endforeach
-                            </tr>
+    <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
+        <table class="fx-table min-w-[960px]">
+            <thead>
+                <tr>
+                    <th class="fx-th w-56">Módulo</th>
+                    @foreach ($roleColumns as $roleLabel)
+                        <th class="fx-th">{{ $roleLabel }}</th>
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+                @foreach ($roleMatrix as $row)
+                    <tr>
+                        <td class="fx-td align-top font-medium text-slate-900">{{ $row['module'] }}</td>
+                        @foreach (array_keys($roleColumns) as $column)
+                            @php $cellLevel = $levels[$level($row[$column])]; @endphp
+                            <td class="fx-td align-top">
+                                <span class="flex gap-2">
+                                    <span class="{{ $cellLevel['class'] }}" title="{{ $cellLevel['label'] }}">{{ $cellLevel['symbol'] }}</span>
+                                    @if ($row[$column] !== 'No.')
+                                        <span class="text-sm text-slate-700">{{ $row[$column] }}</span>
+                                    @endif
+                                </span>
+                            </td>
                         @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
 </x-app-layout>

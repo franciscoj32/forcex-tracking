@@ -27,22 +27,24 @@ class ShipmentFormTest extends TestCase
             'client_id',
             'nro_orden_trabajo',
             'routing_order',
-            'bl',
             'tipo_carga',
+            'incoterm',
             'origen',
             'puerto_carga',
             'puerto_descarga',
             'destino_final',
-            'estado_actual',
+            'customer_id',
             'estado_endoso',
         ]);
+        // La RO nace en el primer estado: no se elige al crear.
+        $response->assertSessionDoesntHaveErrors(['estado_actual', 'bl']);
 
         $this->actingAs($user)
             ->get(route('embarques.create'))
             ->assertOk()
             ->assertSee('Nuevo embarque')
             ->assertSee('Cliente')
-            ->assertSee('Estado actual');
+            ->assertSee('Customer Service');
     }
 
     public function test_create_shipment_form_rejects_duplicate_bl_for_the_same_client(): void
@@ -50,59 +52,26 @@ class ShipmentFormTest extends TestCase
         $user = User::factory()->create([
             'role' => User::ROLE_ADMIN,
         ]);
-        $client = Client::create([
-            'razon_social' => 'Cliente Uno SAC',
-            'ruc' => '20555555551',
-            'correo' => 'cliente1@example.com',
-            'telefono' => '900000001',
-            'direccion' => 'Av. Uno 123',
-            'estado' => 'activo',
-        ]);
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $client = Client::factory()->create(['ruc' => '20555555551']);
 
-        Shipment::create([
-            'client_id' => $client->id,
+        Shipment::create($this->shipmentAttributes($client, [
             'nro_orden_trabajo' => 'OT-BASE-1',
             'routing_order' => 'RO-BASE-1',
             'bl' => 'BL-BASE-1',
-            'tipo_carga' => 'FCL',
-            'origen' => 'Shanghai',
-            'puerto_carga' => 'Shanghai',
-            'puerto_descarga' => 'Callao',
-            'destino_final' => 'Lima',
-            'naviera' => 'Maersk',
-            'consignatario' => 'Cliente Uno',
-            'peso' => 1000,
-            'volumen' => 20,
-            'fecha_etd' => now()->toDateString(),
-            'fecha_eta' => now()->addDays(5)->toDateString(),
-            'estado_actual' => 'En transito',
-            'estado_endoso' => 'pendiente',
-        ]);
+        ]));
 
         $response = $this->actingAs($user)
             ->from(route('embarques.create'))
-            ->post(route('embarques.store'), [
-                'client_id' => $client->id,
+            ->post(route('embarques.store'), $this->payload($client, $customer, [
                 'nro_orden_trabajo' => 'OT-BASE-2',
                 'routing_order' => 'RO-BASE-2',
                 'bl' => 'BL-BASE-1',
-                'tipo_carga' => 'FCL',
-                'origen' => 'Ningbo',
-                'puerto_carga' => 'Ningbo',
-                'puerto_descarga' => 'Callao',
-                'destino_final' => 'Lima',
-                'naviera' => 'CMA CGM',
-                'consignatario' => 'Cliente Uno',
-                'peso' => 900,
-                'volumen' => 18,
-                'fecha_etd' => now()->toDateString(),
-                'fecha_eta' => now()->addDays(7)->toDateString(),
-                'estado_actual' => 'En transito',
-                'estado_endoso' => 'pendiente',
-            ]);
+            ]));
 
         $response->assertRedirect(route('embarques.create'));
         $response->assertSessionHasErrors('bl');
+        $response->assertSessionDoesntHaveErrors('client_id');
     }
 
     public function test_create_shipment_form_rejects_duplicate_routing_order_for_the_same_client(): void
@@ -110,58 +79,54 @@ class ShipmentFormTest extends TestCase
         $user = User::factory()->create([
             'role' => User::ROLE_ADMIN,
         ]);
-        $client = Client::create([
-            'razon_social' => 'Cliente Dos SAC',
-            'ruc' => '20555555552',
-            'correo' => 'cliente2@example.com',
-            'telefono' => '900000002',
-            'direccion' => 'Av. Dos 456',
-            'estado' => 'activo',
-        ]);
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $client = Client::factory()->create(['ruc' => '20555555552']);
 
-        Shipment::create([
-            'client_id' => $client->id,
+        Shipment::create($this->shipmentAttributes($client, [
             'nro_orden_trabajo' => 'OT-BASE-3',
             'routing_order' => 'RO-BASE-3',
             'bl' => 'BL-BASE-3',
-            'tipo_carga' => 'LCL',
-            'origen' => 'Shenzhen',
-            'puerto_carga' => 'Shenzhen',
-            'puerto_descarga' => 'Callao',
-            'destino_final' => 'Lima',
-            'naviera' => 'Evergreen',
-            'consignatario' => 'Cliente Dos',
-            'peso' => 800,
-            'volumen' => 15,
-            'fecha_etd' => now()->toDateString(),
-            'fecha_eta' => now()->addDays(6)->toDateString(),
-            'estado_actual' => 'En transito',
-            'estado_endoso' => 'pendiente',
-        ]);
+        ]));
 
         $response = $this->actingAs($user)
             ->from(route('embarques.create'))
-            ->post(route('embarques.store'), [
-                'client_id' => $client->id,
+            ->post(route('embarques.store'), $this->payload($client, $customer, [
                 'nro_orden_trabajo' => 'OT-BASE-4',
                 'routing_order' => 'RO-BASE-3',
                 'bl' => 'BL-BASE-4',
-                'tipo_carga' => 'LCL',
-                'origen' => 'Busan',
-                'puerto_carga' => 'Busan',
-                'puerto_descarga' => 'Callao',
-                'destino_final' => 'Lima',
-                'naviera' => 'HMM',
-                'consignatario' => 'Cliente Dos',
-                'peso' => 780,
-                'volumen' => 14,
-                'fecha_etd' => now()->toDateString(),
-                'fecha_eta' => now()->addDays(8)->toDateString(),
-                'estado_actual' => 'En transito',
-                'estado_endoso' => 'pendiente',
-            ]);
+            ]));
 
         $response->assertRedirect(route('embarques.create'));
         $response->assertSessionHasErrors('routing_order');
+    }
+
+    private function shipmentAttributes(Client $client, array $overrides = []): array
+    {
+        return array_merge([
+            'client_id' => $client->id,
+            'tipo_carga' => 'FCL',
+            'incoterm' => 'FOB',
+            'origen' => 'China',
+            'puerto_carga' => 'Shanghai',
+            'puerto_descarga' => 'Callao',
+            'destino_final' => 'Peru',
+            'estado_actual' => 'En transito',
+            'estado_endoso' => 'pendiente',
+        ], $overrides);
+    }
+
+    private function payload(Client $client, User $customer, array $overrides = []): array
+    {
+        return array_merge([
+            'client_id' => $client->id,
+            'customer_id' => $customer->id,
+            'tipo_carga' => 'FCL',
+            'incoterm' => 'FOB',
+            'origen' => 'China',
+            'puerto_carga' => 'Ningbo',
+            'puerto_descarga' => 'Callao',
+            'destino_final' => 'Peru',
+            'estado_endoso' => 'pendiente',
+        ], $overrides);
     }
 }

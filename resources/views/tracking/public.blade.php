@@ -1,716 +1,199 @@
+{{-- Tracking publico: lo que ve el cliente con su codigo. Solo datos visibles al cliente. --}}
 @php
-    $timeline = $shipment?->events?->sortByDesc('fecha')->values();
+    $company = \App\Models\AppSetting::current()->company_name;
+    // Solo hitos (con texto estandar) y notas del Customer. Nunca la bitacora interna.
+    $timeline = $shipment?->clientVisibleEvents?->sortByDesc('fecha')->values();
     $latestEventId = $timeline?->first()?->id;
+    $progressStates = \App\Models\Shipment::TRACKING_STATES;
+    $progressIndex = $shipment ? $shipment->currentTrackingStateIndex() : 0;
+    $progressPercent = $shipment ? (int) round(($progressIndex / (count($progressStates) - 1)) * 100) : 0;
+    $stage = $shipment ? \App\Support\ChartPalette::stage($shipment->estado_actual) : null;
+    $date = fn ($value) => $value?->format('d/m/Y') ?? 'Por confirmar';
+    $cargoLabel = $shipment?->tipo_carga === 'AEREO' ? 'Aéreo' : $shipment?->tipo_carga;
 @endphp
 
 <x-public-tracking-layout>
-    <style>
-        .tracking-page {
-            max-width: 980px;
-            margin: 0 auto;
-            padding: 24px;
-            color: #071526;
-        }
-
-        .lucide-icon {
-            width: 20px;
-            height: 20px;
-            stroke-width: 2.1;
-        }
-
-        .tracking-search-card {
-            border: 1px solid #dbe6f1;
-            border-radius: 24px;
-            background: #f8fbff;
-            padding: 24px;
-        }
-
-        .tracking-search-card label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: #0f4c81;
-        }
-
-        .tracking-search-row {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .tracking-search-row input {
-            flex: 1;
-            border: 1px solid #cbd5e1;
-            border-radius: 16px;
-            padding: 14px 16px;
-            font-size: 15px;
-            color: #0f172a;
-            background: #ffffff;
-        }
-
-        .tracking-search-row input:focus {
-            outline: none;
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
-        }
-
-        .tracking-search-row button {
-            border: 0;
-            border-radius: 16px;
-            padding: 14px 20px;
-            background: linear-gradient(135deg, #0f5bd7 0%, #2563eb 100%);
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 800;
-            cursor: pointer;
-            white-space: nowrap;
-            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
-        }
-
-        .tracking-search-row button:disabled,
-        .tracking-search-row input:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
-        .shipment-hero {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 22px;
-            padding: 28px 32px;
-            border-radius: 28px;
-            background: linear-gradient(135deg, #08233d 0%, #0b5f79 55%, #0b8194 100%);
-            color: #ffffff;
-            box-shadow: 0 18px 35px rgba(4, 26, 46, 0.25);
-        }
-
-        .hero-left {
-            display: flex;
-            align-items: center;
-            gap: 18px;
-        }
-
-        .hero-icon {
-            width: 58px;
-            height: 58px;
-            border: 1px solid rgba(255, 255, 255, 0.45);
-            border-radius: 22px;
-            display: grid;
-            place-items: center;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
-            color: #ffffff;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        }
-
-        .hero-icon .lucide-icon {
-            width: 30px;
-            height: 30px;
-        }
-
-        .eyebrow {
-            font-size: 12px;
-            letter-spacing: 5px;
-            font-weight: 800;
-            color: #bff7ff;
-            text-transform: uppercase;
-        }
-
-        .shipment-hero h1 {
-            margin: 6px 0 8px;
-            font-size: 34px;
-            line-height: 1;
-        }
-
-        .shipment-hero p {
-            margin: 0;
-            color: #e7fbff;
-            font-size: 15px;
-        }
-
-        .status-text {
-            color: #9ff7c7;
-            font-weight: 800;
-        }
-
-        .route-card {
-            min-width: 210px;
-            padding: 18px 22px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.75);
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .route-card span {
-            display: block;
-            font-size: 12px;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-weight: 800;
-            color: #d8fbff;
-            margin-bottom: 12px;
-        }
-
-        .route-mini {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            text-transform: capitalize;
-            font-weight: 700;
-        }
-
-        .route-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .country-flag {
-            width: 22px;
-            height: 16px;
-            border-radius: 3px;
-            box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-
-        .route-mini-arrow {
-            color: #9fe8ff;
-            font-size: 20px;
-            line-height: 1;
-        }
-
-        .route-visual {
-            display: grid;
-            grid-template-columns: 1fr 1.3fr 1fr 180px;
-            gap: 18px;
-            align-items: center;
-            margin: 28px 0;
-        }
-
-        .route-point,
-        .eta-box {
-            border: 1px solid #dbe6f1;
-            border-radius: 22px;
-            padding: 20px 22px;
-            background: #ffffff;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
-        }
-
-        .route-point small,
-        .eta-box span {
-            display: block;
-            color: #64748b;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .route-point strong,
-        .eta-box strong {
-            font-size: 19px;
-            text-transform: capitalize;
-            color: #0f172a;
-        }
-
-        .point-icon,
-        .eta-icon,
-        .route-state-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .point-icon,
-        .eta-icon {
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-
-        .point-icon {
-            width: 34px;
-            height: 34px;
-            border-radius: 999px;
-            margin-bottom: 10px;
-        }
-
-        .point-icon.origin-icon {
-            background: linear-gradient(180deg, #ffe4ef, #ffd0e3);
-            color: #db2777;
-        }
-
-        .point-icon.destination-icon {
-            background: linear-gradient(180deg, #f3f4f6, #e5e7eb);
-            color: #111827;
-        }
-
-        .eta-icon {
-            width: 28px;
-            height: 28px;
-            border-radius: 999px;
-            background: linear-gradient(180deg, #f3e8ff, #e9d5ff);
-            color: #7c3aed;
-            margin-right: 10px;
-        }
-
-        .route-line {
-            position: relative;
-            height: 3px;
-            background: linear-gradient(90deg, #0ea5e9, #14b8a6);
-            border-radius: 999px;
-        }
-
-        .route-line::before,
-        .route-line::after {
-            content: "";
-            position: absolute;
-            top: 50%;
-            width: 13px;
-            height: 13px;
-            border-radius: 999px;
-            transform: translateY(-50%);
-        }
-
-        .route-line::before {
-            left: 0;
-            background: #0ea5e9;
-        }
-
-        .route-line::after {
-            right: 0;
-            background: #14b8a6;
-        }
-
-        .route-state-icon {
-            position: absolute;
-            top: -30px;
-            left: 48%;
-            transform: translateX(-50%);
-            width: 58px;
-            height: 58px;
-            border-radius: 999px;
-            background: #ffffff;
-            color: #1d4ed8;
-            box-shadow: 0 16px 26px rgba(14, 165, 233, 0.18);
-        }
-
-        .route-state-icon .lucide-icon {
-            width: 30px;
-            height: 30px;
-        }
-
-        .timeline-card {
-            border: 1px solid #dbe6f1;
-            border-radius: 28px;
-            padding: 32px;
-            background: #ffffff;
-            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.06);
-        }
-
-        .timeline-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 18px;
-            margin-bottom: 26px;
-        }
-
-        .timeline-header h2 {
-            margin: 0 0 8px;
-            font-size: 22px;
-        }
-
-        .timeline-header p {
-            margin: 0;
-            color: #64748b;
-        }
-
-        .events-badge {
-            background: #cffafe;
-            color: #075985;
-            padding: 8px 14px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-            white-space: nowrap;
-        }
-
-        .timeline {
-            position: relative;
-        }
-
-        .timeline::before {
-            content: "";
-            position: absolute;
-            left: 18px;
-            top: 12px;
-            bottom: 12px;
-            width: 2px;
-            background: #dbeafe;
-        }
-
-        .timeline-item {
-            position: relative;
-            display: grid;
-            grid-template-columns: 38px 1fr;
-            gap: 18px;
-            margin-bottom: 18px;
-        }
-
-        .timeline-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .timeline-dot {
-            position: relative;
-            z-index: 2;
-            width: 38px;
-            height: 38px;
-            border-radius: 999px;
-            display: grid;
-            place-items: center;
-            margin-top: 22px;
-            color: #ffffff;
-        }
-
-        .timeline-dot .lucide-icon {
-            width: 18px;
-            height: 18px;
-        }
-
-        .timeline-item.current .timeline-dot {
-            background: #2563eb;
-            box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.12);
-        }
-
-        .timeline-item.completed .timeline-dot {
-            background: #059669;
-            box-shadow: 0 0 0 8px rgba(5, 150, 105, 0.10);
-        }
-
-        .timeline-content {
-            border-radius: 22px;
-            padding: 20px 22px;
-            border: 1px solid #dbeafe;
-            background: #f8fbff;
-        }
-
-        .timeline-item.current .timeline-content {
-            background: linear-gradient(135deg, #dffbff, #c8f4f7);
-            border-color: #99f6e4;
-        }
-
-        .timeline-item.completed .timeline-content {
-            background: #f0fdf7;
-            border-color: #86efac;
-        }
-
-        .timeline-top {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            align-items: center;
-        }
-
-        .timeline-top h3 {
-            margin: 10px 0 0;
-            font-size: 18px;
-            color: #0f172a;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .timeline-top time {
-            font-size: 15px;
-            font-weight: 800;
-            color: #065f46;
-            white-space: nowrap;
-        }
-
-        .timeline-item.current time {
-            color: #0f172a;
-        }
-
-        .timeline-content p {
-            margin: 12px 0 0;
-            color: #475569;
-            font-size: 15px;
-        }
-
-        .event-heading-icon {
-            width: 28px;
-            height: 28px;
-            border-radius: 999px;
-            background: #dbeafe;
-            color: #2563eb;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .timeline-item.completed .event-heading-icon {
-            background: #dcfce7;
-            color: #059669;
-        }
-
-        .badge-current,
-        .badge-completed {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 7px 13px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 900;
-            color: #ffffff;
-        }
-
-        .badge-current {
-            background: #2563eb;
-        }
-
-        .badge-completed {
-            background: #059669;
-        }
-
-        .tracking-alert {
-            border-radius: 20px;
-            padding: 16px 18px;
-            font-size: 14px;
-        }
-
-        .tracking-alert-warning {
-            border: 1px solid #fcd34d;
-            background: #fffbeb;
-            color: #92400e;
-        }
-
-        .tracking-alert-error {
-            border: 1px solid #fda4af;
-            background: #fff1f2;
-            color: #be123c;
-        }
-
-        @media (max-width: 768px) {
-            .tracking-search-row,
-            .shipment-hero,
-            .timeline-top,
-            .timeline-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .shipment-hero {
-                padding: 24px;
-            }
-
-            .shipment-hero h1 {
-                font-size: 28px;
-            }
-
-            .route-card {
-                width: 100%;
-            }
-
-            .route-visual {
-                grid-template-columns: 1fr;
-            }
-
-            .route-line {
-                height: 44px;
-                width: 3px;
-                margin-left: 22px;
-            }
-
-            .route-line::before,
-            .route-line::after {
-                left: 50%;
-                transform: translate(-50%, -50%);
-            }
-
-            .route-state-icon {
-                top: 8px;
-                left: 34px;
-            }
-
-            .timeline-card {
-                padding: 22px;
-            }
-
-            .timeline-item {
-                grid-template-columns: 30px 1fr;
-                gap: 14px;
-            }
-
-            .tracking-page {
-                padding: 18px;
-            }
-        }
-    </style>
-
-    <section class="tracking-page space-y-8">
-        <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-700">Consulta publica</p>
-            <h1 class="mt-2 text-3xl font-semibold text-slate-900">Seguimiento de carga</h1>
-            <p class="mt-3 text-sm text-slate-600">
-                Ingresa el codigo de seguimiento compartido por FORCEX LOGISTICS para consultar el estado actual de tu embarque.
-            </p>
-        </div>
-
-        @if (! $trackingAvailable)
-            <div class="tracking-alert tracking-alert-warning">
-                La consulta publica por codigo de seguimiento aun no esta disponible en este entorno.
-            </div>
-        @endif
-
-        <form method="GET" action="{{ route('tracking.public') }}" class="tracking-search-card">
-            <label for="code">Codigo de seguimiento</label>
-            <div class="tracking-search-row">
-                <input
-                    id="code"
-                    name="code"
-                    value="{{ $code }}"
-                    placeholder="Ejemplo: FX-AB12CD34"
-                    autocomplete="off"
-                    required
-                    @disabled(! $trackingAvailable)
-                >
-                <button type="submit" @disabled(! $trackingAvailable)>Consultar carga</button>
-            </div>
-        </form>
-
-        @if ($trackingAvailable && $searched && ! $shipment)
-            <div class="tracking-alert tracking-alert-error">
-                No encontramos una carga asociada a ese codigo. Verifica el dato e intentalo nuevamente.
-            </div>
-        @endif
-
-        @if ($trackingAvailable && $shipment)
-            <div>
-                <section class="shipment-hero">
-                    <div class="hero-left">
-                        <div class="hero-icon" aria-hidden="true">
-                            <i data-lucide="{{ $shipment->heroTransportIcon() }}" class="lucide-icon"></i>
-                        </div>
-                        <div>
-                            <span class="eyebrow">FORCEX LOGISTICS</span>
-                            <h1>Embarque {{ $shipment->nro_orden_trabajo }}</h1>
-                            <p>
-                                Codigo: <strong>{{ $shipment->tracking_code }}</strong> · Estado actual:
-                                <span class="status-text">{{ $shipment->estado_actual }}</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="route-card">
-                        <span>Ruta actual</span>
-                        <div class="route-mini">
-                            <strong class="route-label">
-                                @if ($shipment->originCountryCode())
-                                    <span class="fi fi-{{ $shipment->originCountryCode() }} country-flag" aria-hidden="true"></span>
-                                @endif
-                                <span>{{ $shipment->origen }}</span>
-                            </strong>
-                            <span class="route-mini-arrow">→</span>
-                            <strong class="route-label">
-                                @if ($shipment->destinationCountryCode())
-                                    <span class="fi fi-{{ $shipment->destinationCountryCode() }} country-flag" aria-hidden="true"></span>
-                                @endif
-                                <span>{{ $shipment->destino_final }}</span>
-                            </strong>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="route-visual">
-                    <div class="route-point">
-                        <span class="point-icon origin-icon" aria-hidden="true">
-                            <i data-lucide="map-pinned" class="lucide-icon"></i>
+    <div class="space-y-4">
+        {{-- Busqueda --}}
+        <section @class(['fx-card p-4 sm:p-5', 'sm:p-8' => ! $shipment])>
+            @unless ($shipment)
+                <h1 class="text-xl font-semibold">Seguimiento de carga</h1>
+                <p class="mt-1 text-slate-600">Ingresa el código que te envió {{ $company }}.</p>
+            @endunless
+
+            <form method="GET" action="{{ route('tracking.public') }}" @class(['flex flex-col gap-2 sm:flex-row', 'mt-4' => ! $shipment])>
+                <label for="code" class="sr-only">Código de seguimiento</label>
+                <input id="code" name="code" value="{{ $code }}" placeholder="Ej. FX-AB12CD34" autocomplete="off" required
+                       class="fx-input mt-0 font-mono uppercase sm:max-w-xs">
+                <button type="submit" class="fx-btn-primary">Consultar</button>
+            </form>
+
+            @if ($searched && ! $shipment)
+                <p class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-rose-800" role="alert">
+                    No encontramos una carga con ese código. Revisa que esté bien escrito.
+                </p>
+            @endif
+        </section>
+
+        @if ($shipment)
+            {{-- Encabezado del embarque --}}
+            <section class="fx-card p-4 sm:p-5">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-700" aria-hidden="true">
+                            <i data-lucide="{{ $shipment->heroTransportIcon() }}" class="h-5 w-5"></i>
                         </span>
-                        <small>Origen</small>
-                        <strong class="route-label">
+                        <div>
+                            <h1 class="text-xl font-semibold">Embarque {{ $shipment->nro_orden_trabajo }}</h1>
+                            <p class="text-slate-600">{{ $cargoLabel }} · código <span class="font-mono">{{ $shipment->tracking_code }}</span></p>
+                        </div>
+                    </div>
+                    <p class="inline-flex items-center gap-2 rounded-md bg-slate-50 px-3 py-1.5 font-medium text-slate-900">
+                        <span class="fx-status-dot {{ $stage['dot'] }}"></span>
+                        {{ $shipment->estado_actual }}
+                    </p>
+                </div>
+
+                {{-- Ruta --}}
+                <div class="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                    <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Origen</p>
+                        <p class="flex items-center gap-2 truncate font-medium text-slate-900">
                             @if ($shipment->originCountryCode())
-                                <span class="fi fi-{{ $shipment->originCountryCode() }} country-flag" aria-hidden="true"></span>
+                                <span class="fi fi-{{ $shipment->originCountryCode() }} shrink-0 rounded-sm" aria-hidden="true"></span>
                             @endif
-                            <span>{{ $shipment->origen }}</span>
-                        </strong>
+                            <span class="truncate">{{ $shipment->puerto_carga ?: $shipment->origen }}</span>
+                        </p>
+                        <p class="truncate text-xs text-slate-500">{{ $shipment->origen }}</p>
                     </div>
-
-                    <div class="route-line">
-                        <span class="route-state-icon" aria-hidden="true">
-                            <i data-lucide="{{ $shipment->routeTransportIcon() }}" class="lucide-icon"></i>
-                        </span>
+                    <div class="flex items-center gap-2 text-brand-600" aria-hidden="true">
+                        <span class="h-px w-6 bg-slate-300 sm:w-16"></span>
+                        <i data-lucide="{{ $shipment->routeTransportIcon() }}" class="h-5 w-5"></i>
+                        <span class="h-px w-6 bg-slate-300 sm:w-16"></span>
                     </div>
-
-                    <div class="route-point">
-                        <span class="point-icon destination-icon" aria-hidden="true">
-                            <i data-lucide="flag-triangle-right" class="lucide-icon"></i>
-                        </span>
-                        <small>Destino final</small>
-                        <strong class="route-label">
+                    <div class="min-w-0 text-right">
+                        <p class="text-xs text-slate-500">Destino</p>
+                        <p class="flex items-center justify-end gap-2 truncate font-medium text-slate-900">
                             @if ($shipment->destinationCountryCode())
-                                <span class="fi fi-{{ $shipment->destinationCountryCode() }} country-flag" aria-hidden="true"></span>
+                                <span class="fi fi-{{ $shipment->destinationCountryCode() }} shrink-0 rounded-sm" aria-hidden="true"></span>
                             @endif
-                            <span>{{ $shipment->destino_final }}</span>
-                        </strong>
+                            <span class="truncate">{{ $shipment->puerto_descarga ?: $shipment->destino_final }}</span>
+                        </p>
+                        <p class="truncate text-xs text-slate-500">{{ $shipment->destino_final }}</p>
                     </div>
+                </div>
 
-                    <div class="eta-box">
-                        <span>
-                            <span class="eta-icon" aria-hidden="true">
-                                <i data-lucide="clock-3" class="lucide-icon"></i>
-                            </span>
-                            ETA
-                        </span>
-                        <strong>{{ optional($shipment->fecha_eta)->format('d/m/Y') ?: 'Sin fecha registrada' }}</strong>
+                {{-- Fechas publicadas (validadas por el Customer) --}}
+                <dl class="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-slate-500">Salida estimada (ETD)</dt>
+                        <dd class="mt-0.5 font-medium tabular-nums text-slate-900">{{ $date($shipment->fecha_etd_cliente) }}</dd>
                     </div>
-                </section>
-
-                <section class="timeline-card">
-                    <div class="timeline-header">
-                        <div>
-                            <h2>Linea de tiempo</h2>
-                            <p>Consulta cronologica del avance operativo registrado.</p>
+                    <div>
+                        <dt class="text-xs text-slate-500">Llegada estimada (ETA)</dt>
+                        <dd class="mt-0.5 font-medium tabular-nums text-slate-900">{{ $date($shipment->fecha_eta_cliente) }}</dd>
+                    </div>
+                    @if ($shipment->containers->isNotEmpty())
+                        <div class="col-span-2">
+                            <dt class="text-xs text-slate-500">{{ $shipment->containers->count() === 1 ? 'Contenedor' : 'Contenedores' }}</dt>
+                            <dd class="mt-0.5 font-mono text-slate-900">{{ $shipment->containers->pluck('numero')->join(', ') }}</dd>
                         </div>
-                        <span class="events-badge">{{ $timeline?->count() ?? 0 }} evento(s)</span>
-                    </div>
+                    @endif
+                </dl>
+            </section>
 
-                    <div class="timeline">
+            {{-- Avance --}}
+            <section class="fx-card p-4 sm:p-5" aria-label="Avance de la carga">
+                <div class="flex items-baseline justify-between gap-3">
+                    <h2 class="fx-section-title">Avance</h2>
+                    <span class="text-sm font-medium tabular-nums text-slate-600">{{ $progressPercent }}%</span>
+                </div>
+                <p class="mt-1 text-slate-700">{{ \App\Models\Shipment::clientStateText($shipment->estado_actual) }}</p>
+                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $progressPercent }}">
+                    <div class="h-full rounded-full bg-accent-600" style="width: {{ max($progressPercent, 3) }}%"></div>
+                </div>
+                <ol class="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                    @foreach ($progressStates as $index => $state)
+                        <li @class([
+                            'flex items-center gap-2',
+                            'text-slate-700' => $index < $progressIndex,
+                            'font-semibold text-slate-900' => $index === $progressIndex,
+                            'text-slate-400' => $index > $progressIndex,
+                        ])>
+                            <span @class([
+                                'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] leading-none',
+                                'bg-accent-600 text-white' => $index < $progressIndex,
+                                'bg-brand-600 ring-4 ring-brand-100' => $index === $progressIndex,
+                                'border border-slate-300' => $index > $progressIndex,
+                            ])>@if ($index < $progressIndex)✓@endif</span>
+                            {{ $state }}
+                        </li>
+                    @endforeach
+                </ol>
+            </section>
+
+            <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
+                {{-- Linea de tiempo --}}
+                <section class="fx-card">
+                    <h2 class="fx-section-title border-b border-slate-200 px-4 py-3 sm:px-5">Novedades</h2>
+                    <ol class="px-4 py-3 sm:px-5">
                         @forelse ($timeline ?? collect() as $event)
-                            @php
-                                $isLatest = $event->id === $latestEventId;
-                            @endphp
-                            <div class="timeline-item {{ $isLatest ? 'current' : 'completed' }}">
-                                <div class="timeline-dot" aria-hidden="true">
-                                    <i data-lucide="{{ $isLatest ? 'arrow-right' : 'badge-check' }}" class="lucide-icon"></i>
-                                </div>
-                                <div class="timeline-content">
-                                    <div class="timeline-top">
-                                        <div>
-                                            <span class="{{ $isLatest ? 'badge-current' : 'badge-completed' }}">
-                                                {{ $isLatest ? '→ Actual' : '✓ Completado' }}
-                                            </span>
-                                            <h3>
-                                                <span class="event-heading-icon" aria-hidden="true">
-                                                    <i data-lucide="{{ $shipment->eventStateIcon($event->estado) }}" class="lucide-icon"></i>
-                                                </span>
-                                                <span>{{ $event->estado }}</span>
-                                            </h3>
-                                        </div>
-                                        <time>{{ $event->fecha->format('d/m/Y H:i') }}</time>
+                            @php $isLatest = $event->id === $latestEventId; @endphp
+                            <li class="relative flex gap-3 pb-4 last:pb-0">
+                                @unless ($loop->last)
+                                    <span class="absolute left-[5px] top-4 h-full w-px bg-slate-200"></span>
+                                @endunless
+                                <span @class([
+                                    'relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full',
+                                    'bg-brand-600 ring-4 ring-brand-100' => $isLatest,
+                                    'bg-accent-600' => ! $isLatest && ! $event->isClientNote(),
+                                    'bg-violet-500' => ! $isLatest && $event->isClientNote(),
+                                ])></span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3">
+                                        <p @class(['text-slate-900', 'font-semibold' => $isLatest, 'font-medium' => ! $isLatest])>
+                                            {{ $event->isClientNote() ? 'Mensaje de tu Customer Service' : $event->estado }}
+                                        </p>
+                                        <time class="text-xs tabular-nums text-slate-500">{{ $event->fecha->format('d/m/Y H:i') }}</time>
                                     </div>
-                                    <p>{{ $event->descripcion ?: 'Sin descripcion adicional.' }}</p>
+                                    <p class="mt-0.5 whitespace-pre-line text-slate-700">{{ $event->clientText() }}</p>
                                 </div>
-                            </div>
+                            </li>
                         @empty
-                            <p class="text-sm text-slate-500">Aun no hay eventos registrados para esta carga.</p>
+                            <li class="text-slate-500">Aún no hay novedades de esta carga.</li>
                         @endforelse
-                    </div>
+                    </ol>
                 </section>
+
+                <div class="space-y-4">
+                    {{-- Donde esta ahora --}}
+                    <section class="fx-card p-4">
+                        <h2 class="flex items-center gap-2 text-sm font-medium text-slate-500">
+                            <i data-lucide="map-pinned" class="h-4 w-4" aria-hidden="true"></i>
+                            Dónde está ahora
+                        </h2>
+                        <p class="mt-1 font-medium text-slate-900">{{ $shipment->ubicacion_actual ?: 'Ubicación por actualizar' }}</p>
+                        @if ($shipment->ubicacion_actualizada_en)
+                            <p class="text-xs text-slate-500">Actualizado el {{ $shipment->ubicacion_actualizada_en->format('d/m/Y H:i') }}</p>
+                        @endif
+                        @if ($shipment->locationMapUrl())
+                            <a class="fx-btn-link-primary mt-2 inline-block" href="{{ $shipment->locationMapUrl() }}" target="_blank" rel="noopener noreferrer">Ver en el mapa</a>
+                        @endif
+                    </section>
+
+                    {{-- Contacto --}}
+                    @if ($shipment->customerService)
+                        <section class="fx-card p-4">
+                            <h2 class="text-sm font-medium text-slate-500">Tu contacto</h2>
+                            <p class="mt-1 font-medium text-slate-900">{{ $shipment->customerService->name }}</p>
+                            <p class="text-xs text-slate-500">Customer Service</p>
+                            @if ($shipment->customerService->email)
+                                <a href="mailto:{{ $shipment->customerService->email }}?subject={{ rawurlencode($shipment->routing_order.' | Consulta') }}" class="fx-btn-secondary mt-3 w-full">Escribir un correo</a>
+                            @endif
+                        </section>
+                    @endif
+                </div>
             </div>
         @endif
-    </section>
+    </div>
 </x-public-tracking-layout>

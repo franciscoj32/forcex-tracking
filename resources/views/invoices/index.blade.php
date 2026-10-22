@@ -1,163 +1,135 @@
+@use('App\Support\Money')
+@use('App\Support\GroupedList')
+@php
+    $canManage = auth()->user()->can('manage-invoices');
+    $defaultGrouping = \App\Http\Controllers\InvoiceController::GROUPINGS[0];
+    // Parametros que se conservan al cambiar de vista, buscar o agrupar.
+    $params = fn (array $changes = []) => array_filter(array_merge([
+        'vista' => $view,
+        'search' => $search,
+        'agrupar' => $grouping !== $defaultGrouping ? $grouping : null,
+    ], $changes), fn ($value) => filled($value));
+    $viewIcons = ['por-cobrar' => 'clock', 'pagadas' => 'check-circle', 'todas' => 'list'];
+    $views = collect(['por-cobrar' => 'Por cobrar', 'pagadas' => 'Pagadas', 'todas' => 'Todas'])
+        ->map(fn ($label, $key) => [
+            'label' => $label,
+            'icon' => $viewIcons[$key],
+            'count' => $counts[$key],
+            'alert' => $key === 'por-cobrar',
+            'url' => route('facturacion.index', $params(['vista' => $key])),
+        ])->all();
+    $groupOptions = ['cliente' => 'Cliente', 'ro' => 'RO', 'ninguno' => 'Sin agrupar'];
+    // Agrupando por RO no se repite la columna "Embarque".
+    $beforeAmount = $grouping === 'ro' ? 3 : 4;
+    $columns = $beforeAmount + 1 + ($canManage ? 1 : 0);
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-slate-900">Facturacion</h1>
-        <p class="text-sm text-slate-500">Consulta facturas agrupadas por embarque y despliega el detalle sin salir del listado.</p>
+        <h1>Facturación</h1>
     </x-slot>
 
-    <div class="fx-card overflow-hidden">
-        <div class="fx-card-header items-start">
-            <div>
-                <h2 class="text-lg font-semibold text-slate-900">Listado de facturas</h2>
-                <p class="mt-1 text-sm text-slate-500">Busca por numero de factura o numero de embarque.</p>
-            </div>
+    <x-slot name="actions">
+        @if ($canManage)
+            <button type="button" class="fx-btn-primary" x-data x-on:click="$dispatch('open-dialog', 'nueva-factura')">Registrar factura</button>
+        @endif
+    </x-slot>
 
-            <div class="flex flex-wrap items-center gap-3">
-                @if (auth()->user()->hasRole(['admin', 'operaciones']))
-                    <a href="{{ route('facturacion.create') }}" class="inline-flex items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-500">
-                        Nueva factura
-                    </a>
-                @endif
-            </div>
-        </div>
+    @if ($canManage)
+        <x-dialog name="nueva-factura" title="Registrar factura" max-width="max-w-3xl"
+                  :show="$errors->any() && old('_form') === 'invoice'">
+            <form method="POST" action="{{ route('facturacion.store') }}" enctype="multipart/form-data" data-disable-native-autocomplete="true">
+                @include('invoices._form', ['shipments' => $formShipments, 'inDialog' => true])
+            </form>
+        </x-dialog>
+    @endif
 
-        <div class="px-6 py-4">
-            <div class="flex flex-col gap-4">
-                <form method="GET" action="{{ route('facturacion.index') }}" class="grid gap-3">
-                    <div class="flex items-center gap-3">
-                        <input
-                            type="search"
-                            name="search"
-                            value="{{ $search }}"
-                            placeholder="Buscar numero de factura o embarque"
-                            class="fx-input mt-0 min-w-0 flex-1 basis-0"
-                        >
-                        <button type="submit" class="inline-flex h-[46px] min-w-[132px] shrink-0 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500">
-                            Filtrar
-                        </button>
-                        @if ($search !== '')
-                            <a href="{{ route('facturacion.index') }}" class="fx-btn-secondary shrink-0 justify-center">Limpiar</a>
-                        @endif
-                    </div>
-                </form>
+    <x-view-tabs :views="$views" :current="$view" />
 
-                <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 text-xs font-medium text-slate-500">
-                    <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Busqueda: {{ $search !== '' ? $search : 'Todas' }}</span>
-                </div>
-            </div>
-        </div>
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <form method="GET" action="{{ route('facturacion.index') }}" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="vista" value="{{ $view }}">
+            @if ($grouping !== $defaultGrouping)
+                <input type="hidden" name="agrupar" value="{{ $grouping }}">
+            @endif
+            <label for="search" class="sr-only">Buscar</label>
+            <input id="search" type="search" name="search" value="{{ $search }}" placeholder="Buscar factura, OT o cliente" class="fx-input mt-0 w-full sm:w-80">
+            <button type="submit" class="sr-only">Buscar</button>
+            @if ($search !== '')
+                <a href="{{ route('facturacion.index', $params(['search' => null])) }}" class="fx-btn-link-primary px-2">Limpiar</a>
+            @endif
+        </form>
 
-        <div class="overflow-x-auto">
-            <table class="fx-table w-full text-[13px]">
-                <thead>
-                    <tr>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5 text-center"></th>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5">OT</th>
-                        <th class="fx-th px-3 py-2.5">Cliente</th>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5">Facturas</th>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5">Total</th>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5">Ultima factura</th>
-                        <th class="fx-th whitespace-nowrap px-3 py-2.5 text-right">Acciones</th>
-                    </tr>
-                </thead>
-                @forelse ($shipments as $shipment)
+        <x-group-selector :options="$groupOptions" :current="$grouping"
+            :url-for="fn ($key) => route('facturacion.index', $params(['agrupar' => $key === $defaultGrouping ? null : $key]))" />
+    </div>
+
+    <div class="mt-4 overflow-x-auto rounded-md border border-slate-200 bg-white">
+        <table class="fx-table">
+            <thead>
+                <tr>
+                    <th class="fx-th">{{ ['cliente' => 'Cliente · factura', 'ro' => 'RO · factura', 'ninguno' => 'Factura'][$grouping] }}</th>
+                    @if ($grouping !== 'ro')
+                        <th class="fx-th">{{ $grouping === 'ninguno' ? 'Embarque · cliente' : 'Embarque' }}</th>
+                    @endif
+                    <th class="fx-th">Registrada</th>
+                    <th class="fx-th">Estado</th>
+                    <th class="fx-th text-right">Monto</th>
+                    @if ($canManage)
+                        <th class="fx-th"><span class="sr-only">Acciones</span></th>
+                    @endif
+                </tr>
+            </thead>
+
+            @if ($groups)
+                @forelse ($groups as $group)
                     @php
-                        $lastInvoiceAt = $shipment->invoices_max_created_at
-                            ? \Illuminate\Support\Carbon::parse($shipment->invoices_max_created_at)
-                            : null;
-                        $matchesShipment = $search !== '' && str_contains(
-                            \Illuminate\Support\Str::lower($shipment->nro_orden_trabajo),
-                            \Illuminate\Support\Str::lower($search)
-                        );
-                        $visibleInvoices = $search === '' || $matchesShipment
-                            ? $shipment->invoices
-                            : $shipment->invoices->filter(fn ($invoice) => str_contains(
-                                \Illuminate\Support\Str::lower($invoice->numero),
-                                \Illuminate\Support\Str::lower($search)
-                            ));
-                        $rowClass = $loop->odd ? 'bg-sky-50/60' : 'bg-emerald-50/50';
+                        // Se abren solos: los de un registro, los de una busqueda y si es el unico grupo.
+                        $autoOpen = $group->documentos === 1 || $search !== '' || $groups->count() === 1;
+                        $hidden = $group->items->count() - GroupedList::ITEMS_PER_GROUP;
                     @endphp
-                    <tbody x-data="{ open: {{ $search !== '' ? 'true' : 'false' }} }" class="divide-y divide-slate-100 bg-white">
-                        <tr class="{{ $rowClass }}">
-                            <td class="fx-td px-3 py-3 text-center">
-                                <button
-                                    type="button"
-                                    x-on:click="open = !open"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/70 hover:text-cyan-600"
-                                    :aria-expanded="open.toString()"
-                                    aria-label="Mostrar u ocultar detalle"
-                                >
-                                    <svg class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180 text-cyan-600' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="m6 9 6 6 6-6"></path>
-                                    </svg>
-                                </button>
-                            </td>
-                            <td class="fx-td whitespace-nowrap px-3 py-3 font-semibold text-slate-900">{{ $shipment->nro_orden_trabajo }}</td>
-                            <td class="fx-td px-3 py-3">{{ $shipment->client->razon_social }}</td>
-                            <td class="fx-td whitespace-nowrap px-3 py-3">
-                                <span class="fx-badge bg-cyan-100 text-cyan-800">{{ $shipment->invoices_count }} factura(s)</span>
-                            </td>
-                            <td class="fx-td whitespace-nowrap px-3 py-3 font-semibold text-slate-900">S/ {{ number_format((float) ($shipment->invoices_sum_monto ?? 0), 2) }}</td>
-                            <td class="fx-td whitespace-nowrap px-3 py-3">{{ $lastInvoiceAt?->format('d/m/Y') ?: '-' }}</td>
-                            <td class="fx-td whitespace-nowrap px-3 py-3">
-                                <div class="flex justify-end">
-                                    <a
-                                        href="{{ route('embarques.show', $shipment) }}"
-                                        class="inline-flex items-center rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-500"
-                                    >
-                                        Ver embarque
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr x-show="open" x-cloak>
-                            <td colspan="7" class="p-0">
-                                <div class="border-t border-slate-200 bg-white">
-                                    <table class="fx-table w-full text-[13px]">
-                                        <thead>
-                                            <tr class="bg-slate-50/70">
-                                                <th class="fx-th whitespace-nowrap px-3 py-2.5 text-center"></th>
-                                                <th colspan="2" class="fx-th whitespace-nowrap px-3 py-2.5">Numero</th>
-                                                <th class="fx-th whitespace-nowrap px-3 py-2.5">Estado</th>
-                                                <th class="fx-th whitespace-nowrap px-3 py-2.5">Monto</th>
-                                                <th class="fx-th whitespace-nowrap px-3 py-2.5">Registrada</th>
-                                                <th class="fx-th whitespace-nowrap px-3 py-2.5 text-right"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100 bg-white">
-                                            @foreach ($visibleInvoices as $invoice)
-                                                <tr>
-                                                    <td class="fx-td px-3 py-3 text-center"></td>
-                                                    <td colspan="2" class="fx-td whitespace-nowrap px-3 py-3 font-semibold text-slate-900">{{ $invoice->numero }}</td>
-                                                    <td class="fx-td whitespace-nowrap px-3 py-3">
-                                                        <span class="fx-badge {{ $invoice->estado === 'pagada' ? 'bg-emerald-100 text-emerald-700' : ($invoice->estado === 'emitida' ? 'bg-cyan-100 text-cyan-700' : 'bg-amber-100 text-amber-700') }}">
-                                                            {{ ucfirst($invoice->estado) }}
-                                                        </span>
-                                                    </td>
-                                                    <td class="fx-td whitespace-nowrap px-3 py-3">S/ {{ number_format((float) $invoice->monto, 2) }}</td>
-                                                    <td class="fx-td whitespace-nowrap px-3 py-3">{{ $invoice->created_at->format('d/m/Y H:i') }}</td>
-                                                    <td class="fx-td whitespace-nowrap px-3 py-3 text-right">
-                                                        <a href="{{ route('facturacion.edit', $invoice) }}" class="text-cyan-700 hover:text-cyan-800">Editar</a>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </td>
-                        </tr>
+                    <tbody x-data="{ open: @js($autoOpen) }" class="divide-y divide-slate-100 border-t-2 border-slate-200">
+                        <x-group-header :group="$group" :colspan="$beforeAmount" :trailing="$canManage ? 1 : 0"
+                            :noun="['factura', 'facturas']" open-label="por cobrar" />
+                        @foreach ($group->items->take(GroupedList::ITEMS_PER_GROUP) as $invoice)
+                            @include('invoices._row', ['rowAttributes' => 'x-show="open"'.($autoOpen ? '' : ' x-cloak')])
+                        @endforeach
+                        @if ($hidden > 0)
+                            <tr x-show="open" @unless ($autoOpen) x-cloak @endunless>
+                                <td class="fx-td text-sm text-slate-500" colspan="{{ $columns }}">
+                                    Y {{ $hidden }} más.
+                                    <a href="{{ route('facturacion.index', $params(['agrupar' => 'ninguno', 'search' => $group->searchTerm])) }}" class="fx-btn-link-primary">Ver todas sin agrupar</a>
+                                </td>
+                            </tr>
+                        @endif
                     </tbody>
                 @empty
-                    <tbody class="divide-y divide-slate-100 bg-white">
-                        <tr>
-                            <td colspan="7" class="fx-td py-10 text-center text-slate-500">
-                                {{ $search !== '' ? 'No se encontraron facturas o embarques con ese criterio.' : 'Todavia no hay facturas registradas.' }}
-                            </td>
-                        </tr>
-                    </tbody>
+                    <tbody><tr><td colspan="{{ $columns }}" class="fx-td py-10 text-center text-slate-500">Sin facturas en esta vista.</td></tr></tbody>
                 @endforelse
-            </table>
-        </div>
+            @else
+                <tbody class="divide-y divide-slate-100 bg-white">
+                    @forelse ($invoices as $invoice)
+                        @include('invoices._row')
+                    @empty
+                        <tr><td colspan="{{ $columns }}" class="fx-td py-10 text-center text-slate-500">Sin facturas en esta vista.</td></tr>
+                    @endforelse
+                </tbody>
+            @endif
 
-        <div class="border-t border-slate-200 px-6 py-4">{{ $shipments->links() }}</div>
+            @if ($totals !== [])
+                <tfoot>
+                    <tr class="border-t border-slate-200 bg-slate-50">
+                        <td class="fx-td font-medium text-slate-700" colspan="{{ $beforeAmount }}">Total de la vista</td>
+                        <td class="fx-td whitespace-nowrap text-right font-semibold text-slate-900">{{ Money::formatTotals($totals) }}</td>
+                        @if ($canManage)<td class="fx-td"></td>@endif
+                    </tr>
+                </tfoot>
+            @endif
+        </table>
     </div>
+
+    @php $paginator = $groups ?? $invoices; @endphp
+    @if ($paginator->hasPages())
+        <div class="mt-4">{{ $paginator->links() }}</div>
+    @endif
 </x-app-layout>

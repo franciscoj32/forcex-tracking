@@ -1,5 +1,8 @@
 import './bootstrap';
 
+// Registra las fuentes en el manifest de Vite para poder precargarlas en el <head>.
+import.meta.glob(['../fonts/*.woff2']);
+
 import Alpine from 'alpinejs';
 import flatpickr from 'flatpickr';
 import {

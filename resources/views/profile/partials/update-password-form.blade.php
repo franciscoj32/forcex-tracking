@@ -1,48 +1,29 @@
-<section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900">
-            Cambiar contrasena
-        </h2>
+<section class="fx-card">
+    <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Cambiar contraseña</h2>
 
-        <p class="mt-1 text-sm text-gray-600">
-            Para guardar una nueva contrasena debes escribir primero tu contrasena actual y luego confirmar la nueva.
-        </p>
-    </header>
-
-    <form method="post" action="{{ route('password.update') }}" class="mt-6 space-y-6">
+    <form method="post" action="{{ route('password.update') }}" class="space-y-4 p-4">
         @csrf
         @method('put')
 
         <div>
-            <x-input-label for="update_password_current_password" :value="'Contrasena actual'" />
-            <x-text-input id="update_password_current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="current-password" />
-            <x-input-error :messages="$errors->updatePassword->get('current_password')" class="mt-2" />
+            <label class="fx-label" for="update_password_current_password">Contraseña actual</label>
+            <input class="fx-input" id="update_password_current_password" name="current_password" type="password" autocomplete="current-password">
+            <x-input-error :messages="$errors->updatePassword->get('current_password')" class="mt-1" />
         </div>
 
-        <div>
-            <x-input-label for="update_password_password" :value="'Nueva contrasena'" />
-            <x-text-input id="update_password_password" name="password" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password')" class="mt-2" />
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label class="fx-label" for="update_password_password">Nueva contraseña</label>
+                <input class="fx-input" id="update_password_password" name="password" type="password" autocomplete="new-password">
+                <x-input-error :messages="$errors->updatePassword->get('password')" class="mt-1" />
+            </div>
+            <div>
+                <label class="fx-label" for="update_password_password_confirmation">Repite la nueva contraseña</label>
+                <input class="fx-input" id="update_password_password_confirmation" name="password_confirmation" type="password" autocomplete="new-password">
+                <x-input-error :messages="$errors->updatePassword->get('password_confirmation')" class="mt-1" />
+            </div>
         </div>
 
-        <div>
-            <x-input-label for="update_password_password_confirmation" :value="'Confirmar nueva contrasena'" />
-            <x-text-input id="update_password_password_confirmation" name="password_confirmation" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password_confirmation')" class="mt-2" />
-        </div>
-
-        <div class="flex items-center gap-4">
-            <x-primary-button>Guardar nueva contrasena</x-primary-button>
-
-            @if (session('status') === 'password-updated')
-                <p
-                    x-data="{ show: true }"
-                    x-show="show"
-                    x-transition
-                    x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-gray-600"
-                >Contrasena actualizada.</p>
-            @endif
-        </div>
+        <button class="fx-btn-primary" type="submit">Cambiar contraseña</button>
     </form>
 </section>

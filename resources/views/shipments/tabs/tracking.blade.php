@@ -1,137 +1,305 @@
-<div class="space-y-6">
-    <div class="grid items-start gap-6 2xl:grid-cols-2">
-        <div class="rounded-3xl border border-slate-200 p-5">
-            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-slate-900">Estado actual del embarque</h3>
-                </div>
-                <div class="flex flex-wrap gap-2 text-xs font-semibold">
-                    <span class="rounded-full bg-amber-100 px-3 py-1 text-amber-700">Actual</span>
-                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">Completado</span>
-                </div>
-            </div>
+{{--
+    Seguimiento: una sola linea de tiempo con los hitos, los formularios para
+    registrar un hito o escribirle al cliente, y el historial completo plegado.
+--}}
+@php
+    $clientNotes = $timelineEvents->where('tipo', \App\Models\ShipmentEvent::TYPE_CLIENT_NOTE)->sortByDesc('fecha')->values();
+    $history = $timelineEvents->sortByDesc('fecha')->values();
+    $recipients = $shipment->clientRecipientEmails();
+    $trackingStateOptions = collect($trackingStates)->map(fn ($state) => ['value' => $state, 'label' => $state]);
+    $logTone = fn (string $status) => match ($status) {
+        'enviado' => 'text-slate-500',
+        'fallido' => 'font-medium text-rose-700',
+        'sin_destinatarios' => 'font-medium text-amber-700',
+        default => 'text-slate-500',
+    };
+@endphp
 
-            @php
-                $currentStateDate = $currentEvent?->fecha?->format('d/m/Y H:i') ?: 'Sin fecha registrada';
-                $currentStateDescription = $currentEvent?->descripcion ?: 'Sin comentario adicional para este hito.';
-            @endphp
-
-            <div class="mt-6 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-50/60 p-5">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="flex items-start gap-4">
-                        <div class="flex flex-col items-center pt-1">
-                            <span class="fx-status-dot bg-amber-500"></span>
-                            <span class="mt-3 text-xl font-bold leading-none text-amber-500">^</span>
-                        </div>
-                        <div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <p class="text-xl font-semibold text-slate-900">{{ $shipment->estado_actual }}</p>
-                                <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Actual</span>
-                            </div>
-                            <p class="mt-2 text-sm leading-6 text-slate-600">{{ $currentStateDescription }}</p>
-                        </div>
-                    </div>
-                    <div class="text-sm font-medium text-slate-500">
-                        {{ $currentStateDate }}
-                    </div>
-                </div>
-            </div>
-
-            @if ($nextState)
-                <div class="mt-4 flex items-center gap-3 border-t border-rose-100 pt-4">
-                    <span class="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]"></span>
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-500">Siguiente estado</p>
-                    <p class="text-sm font-semibold text-rose-700">{{ $nextState }}</p>
-                </div>
-            @endif
-        </div>
-        @if ($canOperate)
-            <div class="rounded-3xl border border-slate-200 p-5">
-                <h3 class="text-lg font-semibold text-slate-900">Registrar nuevo hito</h3>
-                <form method="POST" action="{{ route('embarques.tracking.store', $shipment) }}" class="mt-5 grid gap-4 md:grid-cols-2" data-disable-native-autocomplete="true">
-                    @csrf
-                    <div>
-                        <x-form-combobox
-                            id="estado"
-                            name="estado"
-                            label="Estado"
-                            :options="$trackingStateOptions"
-                            :value="old('estado', $shipment->estado_actual)"
-                            placeholder="Seleccionar estado"
-                            search-placeholder="Buscar estado..."
-                            empty-text="No hay estados que coincidan."
-                            searchable
-                            required
-                        />
-                    </div>
-                    <div>
-                        <x-form-date-picker
-                            id="fecha"
-                            name="fecha"
-                            label="Fecha"
-                            :value="old('fecha', now()->format('Y-m-d H:i:S'))"
-                            placeholder="Seleccionar fecha y hora"
-                            enable-time
-                            required
-                        />
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="fx-label" for="descripcion">Descripción</label>
-                        <textarea class="fx-textarea" id="descripcion" name="descripcion" rows="3" placeholder="Detalle operativo del avance">{{ old('descripcion') }}</textarea>
-                    </div>
-                    <div class="md:col-span-2">
-                        <button class="fx-btn-primary" type="submit">Guardar movimiento</button>
-                    </div>
-                </form>
-            </div>
-        @endif
-    </div>
-
-    <div class="rounded-3xl border border-slate-200 p-5">
-        <div class="mb-4 flex items-center gap-3">
-            <div class="h-px flex-1 bg-slate-200"></div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Historial recorrido</p>
-            <div class="h-px flex-1 bg-slate-200"></div>
-        </div>
-
-        <div class="space-y-4">
-            @foreach ($completedStateIndexes as $index)
-                @php
-                    $state = $trackingStates[$index];
-                    $event = $timelineByState->get($state);
-                    $isCurrent = $index === $currentStateIndex;
-                    $statusClass = $isCurrent ? 'bg-amber-500' : 'bg-emerald-500';
-                    $cardClass = $isCurrent ? 'border-amber-200 bg-amber-50/70' : 'border-emerald-200 bg-emerald-50/70';
-                    $label = $isCurrent ? 'Actual' : 'Completado';
-                @endphp
-                <div class="relative rounded-3xl border px-4 py-4 {{ $cardClass }}">
-                    @if (! $loop->last)
-                        <div class="pointer-events-none absolute bottom-[-20px] left-[1.15rem] top-[3.25rem] w-px bg-gradient-to-b from-slate-300 to-transparent"></div>
-                    @endif
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div class="flex items-start gap-4">
-                            <div class="flex flex-col items-center">
-                                <span class="fx-status-dot {{ $statusClass }}"></span>
-                                @if (! $loop->last)
-                                    <span class="mt-3 text-lg font-bold leading-none text-slate-300">^</span>
+<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div class="space-y-4">
+        {{-- Recorrido --}}
+        <section class="fx-card">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Recorrido</h2>
+            <ol class="px-4 py-3">
+                @foreach ($trackingStates as $index => $state)
+                    @php
+                        $event = $timelineByState->get($state);
+                        $isDone = $index < $currentStateIndex;
+                        $isCurrent = $index === $currentStateIndex;
+                    @endphp
+                    <li class="relative flex gap-3 pb-4 last:pb-0">
+                        @unless ($loop->last)
+                            <span @class(['absolute left-[5px] top-4 h-full w-px', 'bg-accent-600' => $isDone, 'bg-slate-200' => ! $isDone])></span>
+                        @endunless
+                        <span @class([
+                            'relative mt-1 h-[11px] w-[11px] shrink-0 rounded-full',
+                            'bg-accent-600' => $isDone,
+                            'bg-brand-600 ring-4 ring-brand-100' => $isCurrent,
+                            'border-2 border-slate-300 bg-white' => ! $isDone && ! $isCurrent,
+                        ])></span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-baseline justify-between gap-x-3">
+                                <p @class([
+                                    'font-semibold text-slate-900' => $isCurrent,
+                                    'text-slate-800' => $isDone,
+                                    'text-slate-400' => ! $isDone && ! $isCurrent,
+                                ])>
+                                    {{ $state }}
+                                    @if ($isCurrent)<span class="ml-1 text-xs font-medium text-brand-700">actual</span>@endif
+                                </p>
+                                @if ($event)
+                                    <p class="text-xs tabular-nums text-slate-500">{{ $event->fecha->format('d/m/Y H:i') }}</p>
                                 @endif
                             </div>
-                            <div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-semibold text-slate-900">{{ $state }}</p>
-                                    <span class="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $label }}</span>
-                                </div>
-                                <p class="mt-1 text-sm text-slate-600">
-                                    {{ $event?->descripcion ?: 'Sin comentario adicional para este hito.' }}
-                                </p>
-                            </div>
+                            @if ($event?->descripcion)
+                                <p class="mt-0.5 text-sm text-slate-600">{{ $event->descripcion }}</p>
+                            @endif
                         </div>
-                        <div class="text-sm font-medium text-slate-500">
-                            {{ $event?->fecha?->format('d/m/Y H:i') ?: 'Sin fecha registrada' }}
-                        </div>
-                    </div>
+                    </li>
+                @endforeach
+            </ol>
+        </section>
+
+        {{-- Notas que ve el cliente --}}
+        <section class="fx-card">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Notas para el cliente <span class="font-normal text-slate-500">({{ $clientNotes->count() }})</span></h2>
+            @forelse ($clientNotes as $note)
+                <div class="border-b border-slate-100 px-4 py-3 last:border-0">
+                    <p class="whitespace-pre-line text-slate-800">{{ $note->descripcion }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ $note->user->name }} · {{ $note->fecha->format('d/m/Y H:i') }}</p>
                 </div>
-            @endforeach
-        </div>
+            @empty
+                <p class="px-4 py-3 text-slate-500">Sin notas.</p>
+            @endforelse
+        </section>
+
+        {{-- Correos y auditoria, plegados --}}
+        <details class="fx-card group">
+            <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3">
+                <span class="fx-section-title">Correos enviados <span class="font-normal text-slate-500">({{ $shipment->notificationLogs->count() }})</span></span>
+                <span class="text-sm text-slate-500 group-open:hidden">Mostrar</span>
+                <span class="hidden text-sm text-slate-500 group-open:inline">Ocultar</span>
+            </summary>
+            <div class="border-t border-slate-200">
+                @forelse ($shipment->notificationLogs as $log)
+                    <div class="border-b border-slate-100 px-4 py-2.5 last:border-0">
+                        <p class="text-slate-800">{{ $log->asunto }}</p>
+                        <p class="mt-0.5 text-xs text-slate-500">
+                            <span class="{{ $logTone($log->estado) }}">{{ str_replace('_', ' ', ucfirst($log->estado)) }}</span>
+                            · {{ $log->destinatarios ? implode(', ', $log->destinatarios) : 'sin destinatarios' }}
+                            · {{ $log->created_at->format('d/m/Y H:i') }}
+                        </p>
+                        @if ($log->error)
+                            <p class="mt-0.5 text-xs text-rose-700">{{ $log->error }}</p>
+                        @endif
+                    </div>
+                @empty
+                    <p class="px-4 py-3 text-slate-500">Sin correos.</p>
+                @endforelse
+            </div>
+        </details>
+
+        <details class="fx-card group">
+            <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3">
+                <span class="fx-section-title">Historial de cambios <span class="font-normal text-slate-500">({{ $history->count() }})</span></span>
+                <span class="text-sm text-slate-500 group-open:hidden">Mostrar</span>
+                <span class="hidden text-sm text-slate-500 group-open:inline">Ocultar</span>
+            </summary>
+            <div class="border-t border-slate-200">
+                @foreach ($history as $event)
+                    <div class="border-b border-slate-100 px-4 py-2.5 last:border-0">
+                        <p class="text-slate-800">
+                            <span class="font-medium">{{ $event->estado }}</span>
+                            <span class="text-xs text-slate-500">· {{ $event->typeLabel() }}{{ $event->visible_cliente ? ' · lo ve el cliente' : '' }}</span>
+                        </p>
+                        @if ($event->descripcion)
+                            <p class="text-sm text-slate-600">{{ $event->descripcion }}</p>
+                        @endif
+                        <p class="mt-0.5 text-xs text-slate-500">{{ $event->user->name }} · {{ $event->fecha->format('d/m/Y H:i') }}</p>
+                    </div>
+                @endforeach
+            </div>
+        </details>
+    </div>
+
+    {{-- Acciones --}}
+    <div class="space-y-4 lg:sticky lg:top-20">
+        @if ($canTrack)
+            <section id="registrar-hito" class="fx-card scroll-mt-20">
+                <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Registrar hito</h2>
+                <form method="POST" action="{{ route('embarques.tracking.store', $shipment) }}" class="space-y-3 p-4" data-disable-native-autocomplete="true">
+                    @csrf
+                    <x-form-combobox
+                        id="estado"
+                        name="estado"
+                        label="Estado"
+                        :options="$trackingStateOptions"
+                        :value="old('estado', $trackingStates[$currentStateIndex + 1] ?? $shipment->estado_actual)"
+                        placeholder="Seleccionar estado"
+                        search-placeholder="Buscar estado..."
+                        empty-text="No hay estados que coincidan."
+                        searchable
+                        required
+                    />
+                    <x-form-date-picker
+                        id="fecha"
+                        name="fecha"
+                        label="Fecha y hora"
+                        :value="old('fecha', now()->format('Y-m-d H:i:S'))"
+                        placeholder="Seleccionar fecha y hora"
+                        enable-time
+                        required
+                    />
+                    <div>
+                        <label class="fx-label" for="descripcion">Nota interna (el cliente no la ve)</label>
+                        <textarea class="fx-textarea" id="descripcion" name="descripcion" rows="2" placeholder="Detalle operativo">{{ old('descripcion') }}</textarea>
+                    </div>
+                    <button class="fx-btn-primary w-full" type="submit">Guardar hito</button>
+                </form>
+            </section>
+        @endif
+
+        @if ($canCommunicate)
+            <section id="nota-cliente" class="fx-card scroll-mt-20">
+                <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Nota para el cliente</h2>
+                <form method="POST" action="{{ route('embarques.notas-cliente.store', $shipment) }}" class="space-y-3 p-4">
+                    @csrf
+                    <div>
+                        <label class="fx-label" for="nota">Mensaje (se publica en su tracking)</label>
+                        <textarea class="fx-textarea" id="nota" name="nota" rows="3" maxlength="2000" required
+                            placeholder="Ej. Tu carga pasó el aforo documentario sin observaciones.">{{ old('nota') }}</textarea>
+                    </div>
+                    <label class="flex items-start gap-2 text-sm text-slate-700">
+                        <input type="hidden" name="enviar_correo" value="0">
+                        <input type="checkbox" name="enviar_correo" value="1" class="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-600/30" @checked($recipients !== []) @disabled($recipients === [])>
+                        <span>
+                            Enviar también por correo
+                            <span class="block text-xs text-slate-500">{{ $recipients !== [] ? implode(', ', $recipients) : 'El cliente no tiene contactos con avisos de carga.' }}</span>
+                        </span>
+                    </label>
+                    <button type="submit" class="fx-btn-primary w-full">Publicar nota</button>
+                </form>
+            </section>
+
+            {{-- WhatsApp sin costo: abre el WhatsApp del Customer con el mensaje listo --}}
+            @php
+                $waContacts = ($shipment->client?->contacts ?? collect())
+                    ->map(fn ($contact) => [
+                        'id' => $contact->id,
+                        'name' => $contact->nombre,
+                        'first' => \Illuminate\Support\Str::before(trim($contact->nombre), ' '),
+                        'phone' => ($normalized = \App\Support\WhatsApp::normalizePhone($contact->telefono)) ? \App\Support\WhatsApp::display($normalized) : null,
+                        'tracking' => (bool) $contact->recibe_tracking,
+                    ])
+                    ->filter(fn ($contact) => $contact['phone'] !== null)
+                    ->sortByDesc('tracking')
+                    ->values();
+                $waTemplates = \App\Support\WhatsApp::templates($shipment, auth()->user());
+            @endphp
+            <section id="whatsapp" class="fx-card scroll-mt-20"
+                x-data="{
+                    contacts: @js($waContacts),
+                    templates: @js($waTemplates),
+                    contact: @js(old('contact_id', $waContacts->first()['id'] ?? 'otro')),
+                    template: @js(\App\Support\WhatsApp::defaultTemplate($shipment)),
+                    message: @js(old('mensaje', '')),
+                    build() {
+                        const selected = this.contacts.find((c) => String(c.id) === String(this.contact));
+                        const name = selected ? selected.first : '';
+                        this.message = this.templates[this.template].text
+                            .replaceAll('{nombre}', name)
+                            .replace('Hola , ', 'Hola, ');
+                    },
+                }"
+                x-init="if (! message) build()">
+                <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">WhatsApp al cliente</h2>
+                <form method="POST" action="{{ route('embarques.whatsapp', $shipment) }}" target="_blank" class="space-y-3 p-4">
+                    @csrf
+                    <div>
+                        <label class="fx-label" for="wa_contact">Para</label>
+                        <select id="wa_contact" class="fx-select" x-model="contact" x-on:change="build()">
+                            <template x-for="c in contacts" :key="c.id">
+                                <option :value="c.id" x-text="c.name + ' · ' + c.phone"></option>
+                            </template>
+                            <option value="otro">Otro número…</option>
+                        </select>
+                        <input type="hidden" name="contact_id" :value="contact === 'otro' ? '' : contact">
+                        @if ($waContacts->isEmpty())
+                            <p class="mt-1 text-xs text-amber-700">
+                                Ningún contacto del cliente tiene un celular válido.
+                                @can('update', $shipment->client)
+                                    <a href="{{ route('clientes.show', $shipment->client) }}" class="fx-btn-link-primary">Agregar en la ficha del cliente</a>
+                                @endcan
+                            </p>
+                        @endif
+                    </div>
+                    <div x-show="contact === 'otro'" x-cloak>
+                        <label class="fx-label" for="wa_telefono">Celular</label>
+                        <input id="wa_telefono" name="telefono" class="fx-input" inputmode="tel" placeholder="987654321 o +51 987 654 321"
+                            value="{{ old('telefono') }}" :required="contact === 'otro'" :disabled="contact !== 'otro'">
+                    </div>
+                    <div>
+                        <label class="fx-label" for="wa_template">Mensaje sugerido</label>
+                        <select id="wa_template" class="fx-select" x-model="template" x-on:change="build()">
+                            @foreach ($waTemplates as $key => $waTemplate)
+                                <option value="{{ $key }}">{{ $waTemplate['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="fx-label" for="wa_mensaje">Mensaje (puedes editarlo)</label>
+                        <textarea id="wa_mensaje" name="mensaje" class="fx-textarea" rows="7" maxlength="2000" required x-model="message"></textarea>
+                    </div>
+                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+                        <x-nav-icon name="whatsapp" class="h-4 w-4" />
+                        Abrir WhatsApp
+                    </button>
+                    <p class="text-xs text-slate-500">Se abre tu WhatsApp con el mensaje listo y tú lo envías. No tiene costo. Queda registrado en el historial.</p>
+                </form>
+            </section>
+        @endif
+
+        {{-- Pre-alerta de llegada: aviso a cliente, agencia de aduana y transportista --}}
+        @php
+            $lastPreAlert = $shipment->preAlerts()->with('user:id,name')->first();
+            $preAlertEta = $shipment->fecha_eta;
+            $preAlertPending = $preAlertEta && $shipment->isBeforeArrival();
+            $preAlertCurrent = $lastPreAlert?->isSent() && $preAlertEta && $lastPreAlert->eta_enviada?->isSameDay($preAlertEta);
+            $canSendPreAlert = auth()->user()->can('sendPreAlert', $shipment);
+        @endphp
+        @if ($preAlertPending || $lastPreAlert)
+            <section id="pre-alerta" class="fx-card scroll-mt-20">
+                <h2 class="fx-section-title flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+                    <x-nav-icon name="send" class="h-4 w-4 text-slate-500" />
+                    Pre-alerta de llegada
+                </h2>
+                <div class="space-y-3 p-4 text-sm">
+                    @if ($preAlertCurrent)
+                        <p class="text-slate-700">
+                            <span class="font-medium text-accent-700">Enviada</span> con ETA {{ $lastPreAlert->eta_enviada->format('d/m/Y') }}
+                            a {{ $lastPreAlert->recipientsSummary() }}.
+                        </p>
+                        <p class="text-xs text-slate-500">{{ $lastPreAlert->user->name }} · {{ $lastPreAlert->created_at->format('d/m/Y H:i') }}</p>
+                    @elseif ($lastPreAlert?->isHeld())
+                        <p class="text-slate-700"><span class="font-medium text-slate-900">Retenida:</span> {{ $lastPreAlert->motivo_retencion }}</p>
+                        <p class="text-xs text-slate-500">{{ $lastPreAlert->user->name }} · {{ $lastPreAlert->created_at->format('d/m/Y H:i') }}</p>
+                    @elseif ($lastPreAlert?->isSent() && $preAlertPending)
+                        <p class="text-amber-800">Se envió con ETA {{ $lastPreAlert->eta_enviada?->format('d/m/Y') }}. La ETA ahora es {{ $preAlertEta->format('d/m/Y') }}: falta reenviarla.</p>
+                    @elseif ($preAlertPending)
+                        <p class="text-slate-700">Pendiente. Se pide {{ \App\Services\Alerts\AlertThresholds::fromSettings()->preAlertHours }} h antes de la ETA ({{ $preAlertEta->format('d/m/Y') }}).</p>
+                    @else
+                        <p class="text-slate-500">La carga ya arribó.</p>
+                    @endif
+
+                    @if ($canSendPreAlert && $preAlertPending)
+                        <a href="{{ route('embarques.pre-alerta', $shipment) }}" class="{{ $preAlertCurrent ? 'fx-btn-secondary' : 'fx-btn-primary' }} w-full">
+                            {{ $preAlertCurrent ? 'Ver o reenviar' : 'Preparar pre-alerta' }}
+                        </a>
+                    @elseif (! $canSendPreAlert && $preAlertPending && ! $preAlertCurrent)
+                        <p class="text-xs text-slate-500">La envía el Customer de la RO.</p>
+                    @endif
+                </div>
+            </section>
+        @endif
     </div>
 </div>

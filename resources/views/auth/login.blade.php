@@ -1,15 +1,5 @@
 <x-guest-layout>
-    <div class="mb-8 lg:hidden">
-        <x-application-logo />
-    </div>
-
-    <div class="mb-8">
-        <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-600">Acceso privado</p>
-        <h1 class="mt-3 text-3xl font-semibold text-slate-900">Iniciar sesion</h1>
-        <p class="mt-2 text-sm text-slate-500">
-            Ingresa con tu cuenta corporativa para acceder al panel de seguimiento de carga.
-        </p>
-    </div>
+    <h1 class="mb-6 text-xl font-semibold">Iniciar sesión</h1>
 
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
@@ -31,13 +21,13 @@
                     type="password"
                     required
                     autocomplete="current-password"
-                    class="fx-input !mt-0 pr-14"
+                    class="fx-input !mt-0 pr-12"
                 >
                 <button
                     type="button"
                     id="toggle-password"
-                    class="absolute inset-y-0 right-3 my-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-cyan-700"
-                    aria-label="Mostrar contrasena"
+                    class="absolute inset-y-0 right-2 my-auto flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Mostrar contraseña"
                     aria-pressed="false"
                 >
                     <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
@@ -56,18 +46,18 @@
 
         <div class="flex items-center justify-between gap-4">
             <label for="remember_me" class="inline-flex items-center gap-2 text-sm text-slate-600">
-                <input id="remember_me" type="checkbox" class="rounded border-slate-300 text-cyan-600 shadow-sm focus:ring-cyan-500" name="remember">
+                <input id="remember_me" type="checkbox" class="rounded border-slate-300 text-brand-600 focus:ring-brand-600/30" name="remember">
                 <span>Recordarme</span>
             </label>
 
             @if (Route::has('password.request'))
-                <a class="text-sm font-medium text-cyan-700 hover:text-cyan-600" href="{{ route('password.request') }}">
-                    Olvidaste tu contrasena?
+                <a class="fx-btn-link-primary" href="{{ route('password.request') }}">
+                    ¿Olvidaste tu contraseña?
                 </a>
             @endif
         </div>
 
-        <button type="submit" class="fx-btn-primary w-full justify-center py-3 text-base">
+        <button type="submit" class="fx-btn-primary w-full">
             Ingresar
         </button>
     </form>
@@ -87,7 +77,7 @@
                 const showingPassword = passwordInput.type === 'text';
 
                 passwordInput.type = showingPassword ? 'password' : 'text';
-                toggleButton.setAttribute('aria-label', showingPassword ? 'Mostrar contrasena' : 'Ocultar contrasena');
+                toggleButton.setAttribute('aria-label', showingPassword ? 'Mostrar contraseña' : 'Ocultar contraseña');
                 toggleButton.setAttribute('aria-pressed', showingPassword ? 'false' : 'true');
                 eyeIcon.classList.toggle('hidden', !showingPassword);
                 eyeOffIcon.classList.toggle('hidden', showingPassword);

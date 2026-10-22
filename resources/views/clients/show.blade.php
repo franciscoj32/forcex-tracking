@@ -1,143 +1,146 @@
+@php
+    $row = 'flex items-baseline justify-between gap-4 py-1.5';
+    $dt = 'shrink-0 text-slate-500';
+    $dd = 'min-w-0 text-right text-slate-900 break-words';
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-slate-900">{{ $client->razon_social }}</h1>
-        <p class="text-sm text-slate-500">Detalle de cuenta, comportamiento de carga y seguimiento reciente.</p>
+        <p class="hidden text-xs text-slate-500 sm:block"><a href="{{ route('clientes.index') }}" class="hover:underline">Clientes</a> / RUC {{ $client->ruc }}</p>
+        <h1>{{ $client->razon_social }}</h1>
     </x-slot>
 
-    <div class="grid gap-6">
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <div class="fx-card fx-card-body">
-                <p class="text-sm text-slate-500">Embarques activos</p>
-                <p class="mt-2 text-3xl font-semibold text-sky-700">{{ $client->shipments_active_count }}</p>
-            </div>
-            <div class="fx-card fx-card-body">
-                <p class="text-sm text-slate-500">Embarques finalizados</p>
-                <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ $client->shipments_finished_count }}</p>
-            </div>
-            <div class="fx-card fx-card-body">
-                <p class="text-sm text-slate-500">En transito</p>
-                <p class="mt-2 text-3xl font-semibold text-cyan-700">{{ $client->shipments_in_transit_count }}</p>
-            </div>
-            <div class="fx-card fx-card-body">
-                <p class="text-sm text-slate-500">Pendientes de endoso</p>
-                <p class="mt-2 text-3xl font-semibold text-amber-700">{{ $client->shipments_pending_endorsement_count }}</p>
-            </div>
-            <div class="fx-card fx-card-body">
-                <p class="text-sm text-slate-500">Total historico</p>
-                <p class="mt-2 text-3xl font-semibold text-slate-900">{{ $client->shipments_count }}</p>
-            </div>
-        </div>
+    <x-slot name="actions">
+        <a href="{{ route('embarques.index', ['client_id' => $client->id, 'vista' => 'todos']) }}" class="fx-btn-secondary hidden sm:inline-flex">Ver embarques</a>
+        @can('update', $client)
+            <a href="{{ route('clientes.edit', $client) }}" class="fx-btn-secondary">Editar</a>
+        @endcan
+    </x-slot>
 
-        <div class="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
-            <div class="fx-card fx-card-body">
-                <div class="flex items-start justify-between gap-4">
+    <div class="space-y-4">
+        {{-- Aprobacion pendiente o rechazada --}}
+        @unless ($client->isApproved())
+            <section @class(['fx-card border-l-4 p-4', 'border-l-rose-600' => $client->isRejected(), 'border-l-amber-500' => ! $client->isRejected()])>
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
                     <div>
-                        <h2 class="text-lg font-semibold text-slate-900">Datos generales</h2>
-                        <p class="mt-1 text-sm text-slate-500">Informacion comercial base del cliente.</p>
+                        <h2 class="fx-section-title">{{ $client->isRejected() ? 'Cliente rechazado' : 'Pendiente de aprobación' }}</h2>
+                        <p class="mt-1 text-slate-700">
+                            @if ($client->isRejected())
+                                Motivo: {{ $client->observacion_aprobacion }}. Al corregir la ficha vuelve a revisión.
+                            @else
+                                Registrado por {{ $client->registeredBy->name }} el {{ $client->created_at->format('d/m/Y') }}. No se le pueden emitir RO hasta aprobarlo.
+                            @endif
+                        </p>
                     </div>
-                    @if (auth()->user()->isAdmin())
-                        <a href="{{ route('clientes.edit', $client) }}" class="fx-btn-secondary">Editar cuenta</a>
-                    @endif
-                </div>
 
-                <dl class="mt-6 grid gap-4 md:grid-cols-2">
-                    <div><dt class="text-sm text-slate-500">RUC</dt><dd class="font-medium">{{ $client->ruc }}</dd></div>
-                    <div><dt class="text-sm text-slate-500">Correo</dt><dd class="font-medium">{{ $client->correo ?: 'No registrado' }}</dd></div>
-                    <div><dt class="text-sm text-slate-500">Telefono</dt><dd class="font-medium">{{ $client->telefono ?: 'No registrado' }}</dd></div>
-                    <div>
-                        <dt class="text-sm text-slate-500">Estado</dt>
-                        <dd class="font-medium">
-                            <span class="fx-badge {{ $client->estado === 'activo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700' }}">
-                                {{ ucfirst($client->estado) }}
-                            </span>
+                    @can('approve', $client)
+                        <div class="space-y-3">
+                            <form method="POST" action="{{ route('clientes.approve', $client) }}" class="flex gap-2">
+                                @csrf
+                                <label for="approve_note" class="sr-only">Nota de aprobación</label>
+                                <input class="fx-input mt-0" id="approve_note" name="observacion_aprobacion" placeholder="Nota (opcional)">
+                                <button type="submit" class="fx-btn-primary">Aprobar</button>
+                            </form>
+                            @unless ($client->isRejected())
+                                <form method="POST" action="{{ route('clientes.reject', $client) }}" class="flex gap-2">
+                                    @csrf
+                                    <label for="reject_note" class="sr-only">Motivo del rechazo</label>
+                                    <input class="fx-input mt-0" id="reject_note" name="observacion_aprobacion" placeholder="Motivo del rechazo" required>
+                                    <button type="submit" class="fx-btn-secondary text-rose-700">Rechazar</button>
+                                </form>
+                            @endunless
+                        </div>
+                    @endcan
+                </div>
+            </section>
+        @endunless
+
+        {{-- Numeros --}}
+        <section class="fx-card grid grid-cols-3 gap-4 p-4 tabular-nums">
+            <a href="{{ route('embarques.index', ['client_id' => $client->id]) }}" class="group">
+                <p class="text-xs text-slate-500">Embarques activos</p>
+                <p class="mt-0.5 text-2xl font-semibold text-slate-900 group-hover:underline">{{ $client->shipments_active_count }}</p>
+            </a>
+            <a href="{{ route('embarques.index', ['client_id' => $client->id, 'vista' => 'retrasados']) }}" class="group">
+                <p class="text-xs text-slate-500">Retrasados</p>
+                <p @class(['mt-0.5 text-2xl font-semibold group-hover:underline', 'text-rose-700' => $client->shipments_delayed_count > 0, 'text-slate-900' => $client->shipments_delayed_count === 0])>{{ $client->shipments_delayed_count }}</p>
+            </a>
+            <div>
+                <p class="text-xs text-slate-500">Registrados en {{ now()->year }}</p>
+                <p class="mt-0.5 text-2xl font-semibold text-slate-900">{{ $client->shipments_year_count }}</p>
+                <p class="text-xs text-slate-500">{{ $client->shipments_count }} en total</p>
+            </div>
+        </section>
+
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <section class="fx-card">
+                <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Datos de la cuenta</h2>
+                <dl class="divide-y divide-slate-100 px-4 py-1">
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">RUC</dt><dd class="{{ $dd }} tabular-nums">{{ $client->ruc }}</dd></div>
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">Crédito</dt><dd class="{{ $dd }}">{{ $client->creditLabel() }}</dd></div>
+                    <div class="{{ $row }}">
+                        <dt class="{{ $dt }}">Línea de crédito</dt>
+                        <dd class="{{ $dd }} tabular-nums">{{ $client->linea_credito ? $client->moneda_linea_credito.' '.number_format($client->linea_credito, 2) : 'No aplica' }}</dd>
+                    </div>
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">Dirección fiscal</dt><dd class="{{ $dd }}">{{ $client->direccion ?: '—' }}</dd></div>
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">Correo</dt><dd class="{{ $dd }}">{{ $client->correo ?: '—' }}</dd></div>
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">Teléfono</dt><dd class="{{ $dd }}">{{ $client->telefono ?: '—' }}</dd></div>
+                    <div class="{{ $row }}">
+                        <dt class="{{ $dt }}">Aprobación</dt>
+                        <dd class="{{ $dd }}">
+                            {{ $client->approvalLabel() }}
+                            @if ($client->isApproved() && $client->approvedBy)
+                                <span class="block text-xs text-slate-500">{{ $client->approvedBy->name }} · {{ $client->aprobado_en?->format('d/m/Y') }}</span>
+                            @endif
                         </dd>
                     </div>
-                    <div class="md:col-span-2"><dt class="text-sm text-slate-500">Direccion</dt><dd class="font-medium">{{ $client->direccion ?: 'No registrada' }}</dd></div>
+                    @if ($client->estado !== 'activo')
+                        <div class="{{ $row }}"><dt class="{{ $dt }}">Estado</dt><dd class="{{ $dd }}">Inactivo</dd></div>
+                    @endif
                 </dl>
-            </div>
+            </section>
 
-            <div class="fx-card">
-                <div class="fx-card-header">
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-900">Lectura operativa</h2>
-                        <p class="mt-1 text-sm text-slate-500">Resumen rapido para responder al cliente y priorizar gestion.</p>
-                    </div>
-                </div>
-                <div class="grid gap-4 p-6 md:grid-cols-2">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-sm font-semibold text-slate-900">Cuenta con carga en curso</p>
-                        <p class="mt-2 text-sm text-slate-600">
-                            {{ $client->shipments_active_count > 0 ? 'Si, actualmente mantiene operaciones activas y conviene revisar ETA, aduanas y endosos pendientes.' : 'No, por ahora no tiene embarques activos en seguimiento.' }}
-                        </p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-sm font-semibold text-slate-900">Pendientes de endoso</p>
-                        <p class="mt-2 text-sm text-slate-600">
-                            {{ $client->shipments_pending_endorsement_count > 0 ? 'Tiene embarques que todavia requieren control documentario o cierre de endoso.' : 'No registra pendientes de endoso en este momento.' }}
-                        </p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-sm font-semibold text-slate-900">Historial cerrado</p>
-                        <p class="mt-2 text-sm text-slate-600">
-                            {{ $client->shipments_finished_count > 0 ? 'Ya cuenta con operaciones finalizadas que pueden exportarse como reporte historico.' : 'Aun no tiene embarques marcados como finalizados.' }}
-                        </p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-sm font-semibold text-slate-900">Accion sugerida</p>
-                        <p class="mt-2 text-sm text-slate-600">
-                            Filtra este cliente en Embarques para exportar su reporte por estado, fecha o seguimiento cuando lo solicite.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            @include('clients._contacts')
         </div>
 
-        <div class="fx-card">
-            <div class="fx-card-header">
-                <div>
-                    <h2 class="text-lg font-semibold text-slate-900">Embarques recientes</h2>
-                    <p class="mt-1 text-sm text-slate-500">Detalle operativo de los ultimos movimientos registrados para esta cuenta.</p>
+        <section class="fx-card">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Embarques recientes</h2>
+            @if ($client->shipments->isEmpty())
+                <p class="px-4 py-4 text-slate-500">Sin embarques.</p>
+            @else
+                <div class="overflow-x-auto">
+                    <table class="fx-table">
+                        <thead>
+                            <tr>
+                                <th class="fx-th">OT / RO</th>
+                                <th class="fx-th">Tipo</th>
+                                <th class="fx-th">Ruta</th>
+                                <th class="fx-th">ETA</th>
+                                <th class="fx-th">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 bg-white">
+                            @foreach ($client->shipments as $shipment)
+                                <tr>
+                                    <td class="fx-td">
+                                        <a href="{{ route('embarques.show', $shipment) }}" class="font-semibold text-slate-900 hover:underline">{{ $shipment->nro_orden_trabajo }}</a>
+                                        <p class="text-xs text-slate-500">{{ $shipment->routing_order }}</p>
+                                    </td>
+                                    <td class="fx-td">{{ $shipment->tipo_carga === 'AEREO' ? 'Aéreo' : $shipment->tipo_carga }}</td>
+                                    <td class="fx-td">{{ $shipment->puerto_carga }} → {{ $shipment->puerto_descarga }}</td>
+                                    <td class="fx-td whitespace-nowrap">{{ $shipment->fecha_eta?->format('d/m/Y') ?? '—' }}</td>
+                                    <td class="fx-td">
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <span class="fx-status-dot {{ \App\Support\ChartPalette::stage($shipment->estado_actual)['dot'] }}"></span>
+                                            {{ $shipment->estado_actual }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
-                <a href="{{ route('embarques.index', ['client_id' => $client->id]) }}" class="fx-btn-secondary">Ver todos en embarques</a>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="fx-table">
-                    <thead>
-                        <tr>
-                            <th class="fx-th">OT</th>
-                            <th class="fx-th">BL</th>
-                            <th class="fx-th">Tipo</th>
-                            <th class="fx-th">Ruta</th>
-                            <th class="fx-th">ETA</th>
-                            <th class="fx-th">Estado actual</th>
-                            <th class="fx-th">Endoso</th>
-                            <th class="fx-th"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 bg-white">
-                        @forelse ($client->shipments as $shipment)
-                            <tr>
-                                <td class="fx-td font-semibold">{{ $shipment->nro_orden_trabajo }}</td>
-                                <td class="fx-td">{{ $shipment->bl }}</td>
-                                <td class="fx-td">{{ $shipment->tipo_carga }}</td>
-                                <td class="fx-td">{{ $shipment->origen }} -> {{ $shipment->destino_final }}</td>
-                                <td class="fx-td">{{ optional($shipment->fecha_eta)->format('d/m/Y') ?: '-' }}</td>
-                                <td class="fx-td">{{ $shipment->estado_actual }}</td>
-                                <td class="fx-td">
-                                    <span class="fx-badge {{ $shipment->estado_endoso === 'completado' ? 'bg-emerald-100 text-emerald-700' : ($shipment->estado_endoso === 'en_proceso' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700') }}">
-                                        {{ ucfirst(str_replace('_', ' ', $shipment->estado_endoso)) }}
-                                    </span>
-                                </td>
-                                <td class="fx-td"><a href="{{ route('embarques.show', $shipment) }}" class="text-cyan-700">Ver embarque</a></td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="fx-td text-center text-slate-500">Este cliente aun no tiene embarques registrados.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            @endif
+        </section>
     </div>
 </x-app-layout>

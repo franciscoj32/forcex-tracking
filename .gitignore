@@ -1,6 +1,6 @@
 /.phpunit.cache
 /node_modules
-/public/build
+# public/build SI se sube: el hosting no tiene Node para compilar (npm run build antes de cada commit).
 /public/hot
 /public/storage
 /storage/*.key
@@ -30,3 +30,10 @@ yarn-error.log
 /deployment/**/*.zip
 /deployment/**/.env.hosting
 /deployment/**/vendor
+# Copia vieja de la app y de los assets: ahora deploy.sh publica desde el repo.
+# En deployment/ solo quedan el index.php y el .htaccess de la carpeta publica.
+/deployment/gsc-business.com-package/tracking-forcex-app/
+/deployment/gsc-business.com-package/root/build/
+/deployment/gsc-business.com-package/root/flags/
+/deployment/gsc-business.com-package/root/favicon.*
+/deployment/gsc-business.com-package/root/robots.txt

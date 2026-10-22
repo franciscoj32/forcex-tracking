@@ -2,12 +2,12 @@
 
 @php
     $roleOptions = collect($roles)
-        ->map(fn ($role) => ['value' => $role, 'label' => ucfirst($role)]);
+        ->map(fn ($role) => ['value' => $role, 'label' => \App\Models\User::roleLabel($role)]);
     $statusOptions = collect(['activo', 'inactivo'])
         ->map(fn ($estado) => ['value' => $estado, 'label' => ucfirst($estado)]);
 @endphp
 
-<div class="grid gap-5 md:grid-cols-2">
+<div class="fx-card grid gap-4 p-4 sm:grid-cols-2">
     <div>
         <label class="fx-label" for="name">Nombre</label>
         <input class="fx-input" id="name" name="name" value="{{ old('name', $user->name ?? '') }}" required>
@@ -22,22 +22,18 @@
     </div>
     <div>
         <div class="flex items-center justify-between gap-3">
-            <label class="fx-label" for="password">Contraseña {{ isset($user) ? '(opcional)' : '' }}</label>
-            <div class="flex items-center gap-2">
-                <button type="button" id="generate-password" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
-                    Generar
-                </button>
-                <button type="button" id="copy-password" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
-                    Copiar
-                </button>
+            <label class="fx-label" for="password">Contraseña {{ isset($user) ? '(vacío = no cambia)' : '' }}</label>
+            <div class="flex items-center gap-3">
+                <button type="button" id="generate-password" class="fx-btn-link-primary text-xs">Generar</button>
+                <button type="button" id="copy-password" class="fx-btn-link-primary text-xs">Copiar</button>
             </div>
         </div>
         <div class="relative mt-1">
-            <input class="fx-input !mt-0 pr-14" id="password" name="password" type="password" {{ isset($user) ? '' : 'required' }}>
+            <input class="fx-input !mt-0 pr-12" id="password" name="password" type="password" {{ isset($user) ? '' : 'required' }}>
             <button
                 type="button"
                 id="toggle-user-password"
-                class="absolute inset-y-0 right-3 my-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-cyan-700"
+                class="absolute inset-y-0 right-2 my-auto flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Mostrar contraseña"
                 aria-pressed="false"
             >
@@ -52,7 +48,7 @@
                 </svg>
             </button>
         </div>
-        <p id="password-copy-status" class="mt-2 text-xs text-slate-500"></p>
+        <p id="password-copy-status" class="mt-1 text-xs text-slate-500"></p>
     </div>
     <div>
         <x-form-combobox
@@ -76,7 +72,7 @@
     </div>
 </div>
 
-<div class="mt-6 flex gap-3">
+<div class="mt-4 flex gap-2">
     <button class="fx-btn-primary" type="submit">Guardar</button>
     <a href="{{ route('usuarios.index') }}" class="fx-btn-secondary">Cancelar</a>
 </div>
@@ -103,7 +99,7 @@
             }
 
             statusText.textContent = message;
-            statusText.className = success ? 'mt-2 text-xs text-emerald-600' : 'mt-2 text-xs text-rose-600';
+            statusText.className = success ? 'mt-1 text-xs text-slate-600' : 'mt-1 text-xs text-rose-600';
         };
 
         generateButton?.addEventListener('click', () => {

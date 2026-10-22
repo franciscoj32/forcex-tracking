@@ -1,0 +1,21 @@
+{
+  "resources/css/app.css": {
+    "file": "assets/app-AcQeFXrg.css",
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/fonts/ibm-plex-sans-latin-ext-wght-normal.woff2": {
+    "file": "assets/ibm-plex-sans-latin-ext-wght-normal-CIII54If.woff2",
+    "src": "resources/fonts/ibm-plex-sans-latin-ext-wght-normal.woff2"
+  },
+  "resources/fonts/ibm-plex-sans-latin-wght-normal.woff2": {
+    "file": "assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2",
+    "src": "resources/fonts/ibm-plex-sans-latin-wght-normal.woff2"
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-DQy_3rwk.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true
+  }
+}

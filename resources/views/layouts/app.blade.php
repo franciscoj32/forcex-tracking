@@ -1,206 +1,181 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-
-        <title>{{ \App\Models\AppSetting::current()->program_name }}</title>
-        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=forcex">
-        <link rel="shortcut icon" href="{{ asset('favicon.svg') }}?v=forcex">
-        <link rel="apple-touch-icon" href="{{ asset('favicon.svg') }}?v=forcex">
-
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=ibm-plex-sans:400,500,600,700&display=swap" rel="stylesheet" />
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @include('layouts.partials.head')
     </head>
-    <body class="font-['IBM_Plex_Sans']">
+    <body>
         @php
             $user = auth()->user();
-            $appSettings = \App\Models\AppSetting::current();
+            $isAdmin = $user->isAdmin();
+            // Grupos del menu. Un grupo sin titulo se muestra sin encabezado.
             $menu = [
-                'core' => [
-                    ['label' => 'Dashboard', 'route' => 'dashboard', 'active' => ['dashboard'], 'icon' => 'dashboard', 'can' => true],
-                ],
-                'gestion' => [
-                    ['label' => 'Clientes', 'route' => 'clientes.index', 'active' => ['clientes.*'], 'icon' => 'clients', 'can' => $user->hasRole(['admin', 'operaciones', 'comercial'])],
-                    ['label' => 'Embarques', 'route' => 'embarques.index', 'active' => ['embarques.index', 'embarques.create', 'embarques.show', 'embarques.edit'], 'icon' => 'shipments', 'can' => true],
-                    ['label' => 'Provisiones', 'route' => 'provisiones.index', 'active' => ['provisiones.*'], 'icon' => 'provisions', 'can' => $user->hasRole(['admin', 'operaciones', 'comercial'])],
-                    ['label' => 'Facturación', 'route' => 'facturacion.index', 'active' => ['facturacion.*'], 'icon' => 'billing', 'can' => $user->hasRole(['admin', 'operaciones', 'comercial'])],
-                    ['label' => 'Reportes', 'route' => 'reportes.index', 'active' => ['reportes.*'], 'icon' => 'reports', 'can' => $user->hasRole(['admin', 'operaciones', 'comercial'])],
-                ],
-                'seguridad' => [
-                    ['label' => 'Usuarios', 'route' => 'usuarios.index', 'active' => ['usuarios.*'], 'icon' => 'users', 'can' => $user->hasRole(['admin'])],
-                    ['label' => 'Roles', 'route' => 'roles.index', 'active' => ['roles.*'], 'icon' => 'roles', 'can' => $user->hasRole(['admin'])],
-                    ['label' => 'Configuracion', 'route' => 'configuracion.edit', 'active' => ['configuracion.*'], 'icon' => 'settings', 'can' => $user->hasRole(['admin'])],
-                ],
-                'cuenta' => [
-                    ['label' => 'Perfil', 'route' => 'profile.edit', 'active' => ['profile.edit'], 'icon' => 'profile', 'can' => true],
-                ],
+                ['title' => null, 'items' => [
+                    ['label' => 'Inicio', 'route' => 'dashboard', 'active' => ['dashboard'], 'icon' => 'home', 'can' => true],
+                    ['label' => 'Embarques', 'route' => 'embarques.index', 'active' => ['embarques.*'], 'icon' => 'shipments', 'can' => true],
+                    ['label' => 'Clientes', 'route' => 'clientes.index', 'active' => ['clientes.*'], 'icon' => 'clients', 'can' => $user->can('viewAny', \App\Models\Client::class)],
+                ]],
+                ['title' => 'Finanzas', 'items' => [
+                    ['label' => 'Provisiones', 'route' => 'provisiones.index', 'active' => ['provisiones.*'], 'icon' => 'provisions', 'can' => $user->can('view-provisions')],
+                    ['label' => 'Facturación', 'route' => 'facturacion.index', 'active' => ['facturacion.*'], 'icon' => 'billing', 'can' => $user->can('view-invoices')],
+                    ['label' => 'Proveedores', 'route' => 'proveedores.index', 'active' => ['proveedores.*'], 'icon' => 'suppliers', 'can' => $user->can('view-provisions')],
+                    ['label' => 'Conceptos de tarifa', 'route' => 'conceptos.index', 'active' => ['conceptos.*'], 'icon' => 'concepts', 'can' => $user->can('manage-rate-concepts')],
+                ]],
+                ['title' => null, 'items' => [
+                    ['label' => 'Reportes', 'route' => 'reportes.index', 'active' => ['reportes.*'], 'icon' => 'reports', 'can' => $user->can('view-reports')],
+                ]],
+                ['title' => 'Administración', 'items' => [
+                    ['label' => 'Usuarios', 'route' => 'usuarios.index', 'active' => ['usuarios.*'], 'icon' => 'users', 'can' => $isAdmin],
+                    ['label' => 'Roles', 'route' => 'roles.index', 'active' => ['roles.*'], 'icon' => 'roles', 'can' => $isAdmin],
+                    ['label' => 'Configuración', 'route' => 'configuracion.edit', 'active' => ['configuracion.*'], 'icon' => 'settings', 'can' => $isAdmin],
+                ]],
             ];
         @endphp
 
-        <div class="min-h-screen bg-slate-100 text-slate-900">
-            <div class="flex min-h-screen">
-                <aside class="hidden w-72 shrink-0 bg-slate-950 text-slate-200 lg:block">
-                    <div class="flex h-full flex-col px-6 py-8">
-                        <x-application-logo />
+        <div x-data="{ menuOpen: false }" x-on:keydown.escape.window="menuOpen = false" class="min-h-screen lg:flex">
+            {{-- Fondo oscuro del menu en celular --}}
+            <div x-cloak x-show="menuOpen" x-transition.opacity x-on:click="menuOpen = false" class="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"></div>
 
-                        <nav class="mt-8 space-y-8">
-                            @foreach ($menu as $section => $items)
-                                @php $visibleItems = collect($items)->where('can', true); @endphp
-                                @if ($visibleItems->isNotEmpty())
-                                    <div>
-                                        <p class="px-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">{{ $section }}</p>
-                                        <div class="mt-3 space-y-1">
-                                            @foreach ($visibleItems as $item)
-                                                @php
-                                                    $isActive = collect($item['active'] ?? [$item['route']])
-                                                        ->contains(fn ($pattern) => request()->routeIs($pattern));
-                                                @endphp
-                                                <a href="{{ route($item['route']) }}"
-                                                   class="group {{ $isActive ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-300 hover:bg-white/5 hover:text-white' }} flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition">
-                                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl {{ $isActive ? 'bg-cyan-400/10 text-white' : 'bg-white/5 text-white group-hover:bg-white/10 group-hover:text-white' }}">
-                                                        @switch($item['icon'] ?? 'default')
-                                                            @case('dashboard')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M3 12.5 12 4l9 8.5"/>
-                                                                    <path d="M5 10.5V20h14v-9.5"/>
-                                                                    <path d="M9.5 20v-5h5v5"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('clients')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M16 19a4 4 0 0 0-8 0"/>
-                                                                    <circle cx="12" cy="11" r="3"/>
-                                                                    <path d="M5 19a3 3 0 0 1 3-3"/>
-                                                                    <path d="M19 19a3 3 0 0 0-3-3"/>
-                                                                    <path d="M7.5 10a2.5 2.5 0 1 0-2.5-2.5"/>
-                                                                    <path d="M16.5 10A2.5 2.5 0 1 1 19 7.5"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('shipments')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M3 7h11v8H3z"/>
-                                                                    <path d="M14 10h3l3 3v2h-6z"/>
-                                                                    <circle cx="7.5" cy="17.5" r="1.5"/>
-                                                                    <circle cx="17.5" cy="17.5" r="1.5"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('provisions')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M6 4h9l3 3v13H6z"/>
-                                                                    <path d="M15 4v4h4"/>
-                                                                    <path d="M9 12h6"/>
-                                                                    <path d="M9 16h4"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('billing')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <rect x="4" y="5" width="16" height="14" rx="2"/>
-                                                                    <path d="M4 10h16"/>
-                                                                    <path d="M8 15h3"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('reports')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M4 19h16"/>
-                                                                    <path d="M7 16V9"/>
-                                                                    <path d="M12 16V5"/>
-                                                                    <path d="M17 16v-7"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('users')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="M17 19a5 5 0 0 0-10 0"/>
-                                                                    <circle cx="12" cy="10" r="3"/>
-                                                                    <path d="M19 8h2"/>
-                                                                    <path d="M20 7v2"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('roles')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <path d="m12 3 7 4v5c0 4.2-2.7 8.1-7 9-4.3-.9-7-4.8-7-9V7z"/>
-                                                                    <path d="m9.5 12 1.8 1.8 3.2-3.6"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('settings')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <circle cx="12" cy="12" r="3"/>
-                                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('profile')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <circle cx="12" cy="8" r="3"/>
-                                                                    <path d="M6 19a6 6 0 0 1 12 0"/>
-                                                                </svg>
-                                                                @break
-                                                            @case('password')
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <rect x="4" y="11" width="16" height="9" rx="2"/>
-                                                                    <path d="M8 11V8a4 4 0 1 1 8 0v3"/>
-                                                                    <circle cx="12" cy="15.5" r="1"/>
-                                                                </svg>
-                                                                @break
-                                                            @default
-                                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                                    <circle cx="12" cy="12" r="8"/>
-                                                                </svg>
-                                                        @endswitch
-                                                    </span>
-                                                    <span>{{ $item['label'] }}</span>
-                                                </a>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        </nav>
-
-                    </div>
-                </aside>
-
-                <div class="flex min-w-0 flex-1 flex-col">
-                    <header class="border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur lg:px-8">
-                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ $appSettings->company_name }}</p>
-                                @isset($header)
-                                    <div class="mt-1">{{ $header }}</div>
-                                @else
-                                    <h1 class="text-2xl font-semibold text-slate-900">Panel de control</h1>
-                                @endisset
-                            </div>
-
-                            <div class="flex items-center gap-3">
-                                <a href="{{ route('profile.edit') }}" class="fx-btn-secondary">Mi perfil</a>
-                                <form method="POST" action="{{ route('logout') }}">
-                                    @csrf
-                                    <button type="submit" class="fx-btn-primary">Cerrar sesion</button>
-                                </form>
-                            </div>
-                        </div>
-                    </header>
-
-                    <main class="flex-1 px-4 py-6 lg:px-8">
-                        @if (($pendingMigrations ?? 0) > 0)
-                            <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-                                <p class="font-semibold">Hay {{ $pendingMigrations }} migración(es) pendiente(s).</p>
-                                <p class="mt-1">Ejecuta `php artisan migrate` para alinear la base de datos con el código actual.</p>
-                            </div>
-                        @endif
-
-                        @if (session('status'))
-                            <div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                                {{ session('status') }}
-                            </div>
-                        @endif
-
-                        {{ $slot }}
-                    </main>
+            {{-- Menu lateral: fijo en escritorio, desplegable en celular --}}
+            <aside
+                class="fx-sidebar fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+                :class="{ '!translate-x-0': menuOpen }"
+                aria-label="Menú principal"
+            >
+                <div class="fx-sidebar-divider flex h-14 shrink-0 items-center justify-between border-b px-4">
+                    <a href="{{ route('dashboard') }}" class="min-w-0"><x-application-logo dark /></a>
+                    <button type="button" class="rounded-md p-1.5 text-brand-200 hover:bg-white/10 hover:text-white lg:hidden" x-on:click="menuOpen = false" aria-label="Cerrar menú">
+                        <x-nav-icon name="close" class="h-5 w-5" />
+                    </button>
                 </div>
+
+                <form method="GET" action="{{ route('embarques.index') }}" class="fx-sidebar-divider border-b p-3 xl:hidden" role="search">
+                    <label for="mobile-search" class="sr-only">Buscar embarque</label>
+                    <input id="mobile-search" type="search" name="q" placeholder="Buscar OT, RO, BL o código" class="fx-input mt-0">
+                </form>
+
+                <nav class="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+                    @foreach ($menu as $group)
+                        @php $visibleItems = collect($group['items'])->where('can', true); @endphp
+                        @if ($visibleItems->isNotEmpty())
+                            <div class="space-y-0.5">
+                                @if ($group['title'])
+                                    <p class="fx-nav-group-title">{{ $group['title'] }}</p>
+                                @endif
+                                @foreach ($visibleItems as $item)
+                                    @php $isActive = collect($item['active'])->contains(fn ($pattern) => request()->routeIs($pattern)); @endphp
+                                    <a href="{{ route($item['route']) }}" @class(['fx-nav-link', 'fx-nav-link-active' => $isActive]) @if ($isActive) aria-current="page" @endif>
+                                        <x-nav-icon :name="$item['icon']" class="fx-nav-icon" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
+                    @endforeach
+                </nav>
+
+                {{-- Usuario: nombre y rol arriba; Mi perfil y Cerrar sesion, uno debajo del otro --}}
+                @php
+                    $initials = collect(preg_split('/\s+/', trim($user->name)))
+                        ->filter()->take(2)->map(fn ($word) => mb_strtoupper(mb_substr($word, 0, 1)))->join('');
+                @endphp
+                <div class="fx-sidebar-divider shrink-0 border-t p-3">
+                    <div class="flex items-center gap-3 px-3 pb-2 pt-1">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white" aria-hidden="true">{{ $initials }}</span>
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-medium text-white">{{ $user->name }}</p>
+                            <p class="truncate text-xs text-brand-200">{{ \App\Models\User::roleLabel($user->role) }}</p>
+                        </div>
+                    </div>
+                    <div class="space-y-0.5">
+                        <a href="{{ route('profile.edit') }}" @class(['fx-nav-link', 'fx-nav-link-active' => request()->routeIs('profile.*')]) @if (request()->routeIs('profile.*')) aria-current="page" @endif>
+                            <x-nav-icon name="user" class="fx-nav-icon" />
+                            <span>Mi perfil</span>
+                        </a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="fx-nav-link w-full">
+                                <x-nav-icon name="logout" class="fx-nav-icon" />
+                                <span>Cerrar sesión</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="flex min-w-0 flex-1 flex-col">
+                <header class="sticky top-0 z-20 border-b border-slate-200 bg-white">
+                    <div class="flex min-h-14 items-center gap-3 px-4 py-2 sm:px-6">
+                        <button type="button" class="-ml-1 rounded-md p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden" x-on:click="menuOpen = true" aria-label="Abrir menú">
+                            <x-nav-icon name="menu" class="h-5 w-5" />
+                        </button>
+
+                        <div class="min-w-0 flex-1 [&_h1]:truncate [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:sm:text-xl">
+                            @isset($header)
+                                {{ $header }}
+                            @else
+                                <h1>{{ \App\Models\AppSetting::current()->program_name }}</h1>
+                            @endisset
+                        </div>
+
+                        @isset($actions)
+                            <div class="flex shrink-0 items-center gap-2">{{ $actions }}</div>
+                        @endisset
+
+                        <form method="GET" action="{{ route('embarques.index') }}" @class(['relative w-72 shrink-0', 'hidden', 'xl:block' => ! request()->routeIs('embarques.index')]) role="search">
+                            <label for="global-search" class="sr-only">Buscar embarque</label>
+                            <x-nav-icon name="search" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input id="global-search" type="search" name="q" placeholder="Buscar OT, RO, BL o código" class="fx-input mt-0 h-9 pl-9">
+                        </form>
+                    </div>
+                </header>
+
+                <main class="w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6">
+                    @if ($isAdmin && ($pendingMigrations ?? 0) > 0)
+                        <div class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            Hay {{ $pendingMigrations }} migración(es) pendiente(s). Ejecuta <code class="font-mono">php artisan migrate</code>.
+                        </div>
+                    @endif
+
+                    @if ($errors->any())
+                        <div class="mb-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                            <p class="font-medium">Revisa estos datos:</p>
+                            <ul class="mt-1 list-disc space-y-0.5 pl-5">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    {{ $slot }}
+                </main>
             </div>
+
+            {{-- Aviso temporal de "guardado" --}}
+            @php
+                $statusMessage = match (session('status')) {
+                    'profile-updated' => 'Perfil actualizado.',
+                    'password-updated' => 'Contraseña actualizada.',
+                    'verification-link-sent' => 'Te enviamos un nuevo enlace de verificación.',
+                    default => is_string(session('status')) ? session('status') : null,
+                };
+            @endphp
+            @if ($statusMessage)
+                <div
+                    x-data="{ show: true }"
+                    x-init="setTimeout(() => show = false, 5000)"
+                    x-show="show"
+                    x-transition.opacity.duration.200ms
+                    role="status"
+                    class="fixed inset-x-4 bottom-4 z-50 flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-lg sm:inset-x-auto sm:right-6 sm:max-w-sm"
+                >
+                    <span class="mt-1 fx-status-dot bg-accent-600"></span>
+                    <p class="flex-1">{{ $statusMessage }}</p>
+                    <button type="button" x-on:click="show = false" class="text-slate-400 hover:text-slate-700" aria-label="Cerrar aviso">
+                        <x-nav-icon name="close" />
+                    </button>
+                </div>
+            @endif
         </div>
     </body>
 </html>

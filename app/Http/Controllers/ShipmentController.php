@@ -2,134 +2,212 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Document;
+use App\Models\AppSetting;
 use App\Models\Client;
+use App\Models\Document;
+use App\Models\RateConcept;
 use App\Models\Shipment;
+use App\Models\ShipmentRate;
 use App\Models\ShipmentEvent;
 use App\Models\ShipmentUserAssignment;
-use App\Models\UserShipmentPreference;
 use App\Models\User;
+use App\Models\UserShipmentPreference;
+use App\Support\Exports\ShipmentExportRows;
+use App\Support\Exports\XlsxExport;
+use App\Support\ShipmentFieldAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ShipmentController extends Controller
 {
+    /** Campos que no se asignan en bloque al modelo. */
+    private const NON_ATTRIBUTE_FIELDS = ['responsable_users', 'tracking_users', 'condicion_credito', 'dias_credito', 'rates'];
+
+    /**
+     * Vistas rapidas del listado. Cada una responde a una pregunta de trabajo
+     * y su numero reemplaza a las tarjetas de indicadores.
+     */
+    public const INDEX_VIEWS = [
+        'activos' => 'Activos',
+        'retrasados' => 'Retrasados',
+        'arribos' => 'Arriban en 7 días',
+        'validar' => 'Fecha por validar',
+        'finalizados' => 'Finalizados',
+        'todos' => 'Todos',
+    ];
+
     public function index(): View
     {
         $user = auth()->user();
-        $search = trim((string) request('q', ''));
-        $clientId = auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-            ? request('client_id')
-            : null;
-        $lifecycle = (string) request('lifecycle', 'all');
+        $filters = $this->indexFilters(request());
 
-        $query = $this->buildIndexQuery($user, $search, $clientId, $lifecycle)
-            ->orderByDesc('is_pinned_for_user')
-            ->latest('shipments.updated_at');
+        $base = fn () => $this->buildIndexQuery($user, $filters['q'], $filters['client_id'], 'todos', $filters['tipo'], $filters['mios']);
+
+        $counts = collect(array_keys(self::INDEX_VIEWS))
+            ->mapWithKeys(fn (string $view) => [$view => $this->applyIndexView($base(), $view)->count()]);
+
+        $query = $this->applyIndexView($base(), $filters['vista'])
+            ->withCount('pendingDateChanges')
+            ->with(['customerService:id,name', 'operador:id,name'])
+            ->orderByDesc('is_pinned_for_user');
+
+        // Retrasados y por arribar se leen por urgencia; el resto por ultima actividad.
+        if (in_array($filters['vista'], ['retrasados', 'arribos'], true)) {
+            $query->orderBy('shipments.fecha_eta');
+        }
+
+        $query->latest('shipments.updated_at');
 
         return view('shipments.index', [
-            'shipments' => $query->paginate(12)->withQueryString(),
-            'search' => $search,
-            'selectedClientId' => (string) ($clientId ?? ''),
-            'selectedLifecycle' => $lifecycle,
-            'clients' => $user->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
+            'shipments' => $query->paginate(15)->withQueryString(),
+            'filters' => $filters,
+            'views' => self::INDEX_VIEWS,
+            'counts' => $counts,
+            'clients' => $user->isInternal()
                 ? Client::orderBy('razon_social')->get(['id', 'razon_social'])
                 : collect(),
         ]);
     }
 
-    public function export(Request $request): Response
+    /** Filtros del listado y del Excel (acepta el parametro antiguo `lifecycle`). */
+    private function indexFilters(Request $request): array
     {
         $user = $request->user();
-        $search = trim((string) $request->query('q', ''));
-        $clientId = $user->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-            ? $request->query('client_id')
-            : null;
-        $lifecycle = (string) $request->query('lifecycle', 'all');
+        $legacy = ['active' => 'activos', 'finished' => 'finalizados', 'all' => 'todos'];
+        $view = (string) $request->query('vista', $legacy[$request->query('lifecycle')] ?? 'activos');
 
-        $shipments = $this->buildIndexQuery($user, $search, $clientId, $lifecycle)
-            ->with('endorsementResponsible')
+        return [
+            'q' => trim((string) $request->query('q', '')),
+            'vista' => array_key_exists($view, self::INDEX_VIEWS) ? $view : 'activos',
+            'client_id' => $user->isInternal() ? (string) $request->query('client_id', '') : '',
+            'tipo' => in_array($request->query('tipo'), ['FCL', 'LCL', 'AEREO'], true) ? (string) $request->query('tipo') : '',
+            'mios' => $request->boolean('mios'),
+        ];
+    }
+
+    private function applyIndexView($query, string $view)
+    {
+        return match ($view) {
+            'activos' => $query->where('shipments.estado_actual', '!=', 'Finalizado'),
+            'retrasados' => $query->delayed(),
+            'arribos' => $query
+                ->whereBetween('shipments.fecha_eta', [now()->startOfDay()->toDateString(), now()->addDays(7)->toDateString()])
+                ->whereIn('shipments.estado_actual', Shipment::statesBeforeArrival()),
+            'validar' => $query->whereHas('pendingDateChanges'),
+            'finalizados' => $query->where('shipments.estado_actual', 'Finalizado'),
+            default => $query,
+        };
+    }
+
+    /** Excel real (.xlsx) del listado con los filtros aplicados. */
+    public function export(Request $request): StreamedResponse
+    {
+        $user = $request->user();
+        $applied = $this->indexFilters($request);
+
+        $shipments = $this->applyIndexView(
+            $this->buildIndexQuery($user, $applied['q'], $applied['client_id'], 'todos', $applied['tipo'], $applied['mios']),
+            $applied['vista']
+        )
+            ->with(['comercial:id,name', 'customerService:id,name', 'operador:id,name', 'containers:id,shipment_id,numero'])
             ->orderByDesc('is_pinned_for_user')
             ->latest('shipments.updated_at')
             ->get();
 
         $filters = [
-            'Busqueda' => $search !== '' ? $search : 'Todas',
-            'Cliente' => blank($clientId)
+            'Vista' => self::INDEX_VIEWS[$applied['vista']],
+            'Busqueda' => $applied['q'] !== '' ? $applied['q'] : 'Todas',
+            'Cliente' => blank($applied['client_id'])
                 ? 'Todos'
-                : Client::query()->whereKey($clientId)->value('razon_social'),
-            'Ciclo' => match ($lifecycle) {
-                'active' => 'Activos',
-                'finished' => 'Finalizados',
-                default => 'Todos',
-            },
+                : (string) Client::query()->whereKey($applied['client_id'])->value('razon_social'),
+            'Tipo' => $applied['tipo'] !== '' ? $applied['tipo'] : 'Todos',
+            'Responsable' => $applied['mios'] ? $user->name : 'Todos',
         ];
 
-        $html = view('shipments.export', [
-            'shipments' => $shipments,
-            'filters' => $filters,
-            'generatedAt' => now(),
-        ])->render();
-
-        $filename = 'embarques_'.now()->format('Ymd_His').'.xls';
-
-        return response($html, 200, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ]);
+        return (new XlsxExport('Embarques'))
+            ->sheet('Embarques', ShipmentExportRows::operationsColumns(), ShipmentExportRows::operationsRows($shipments), $filters)
+            ->download('embarques_'.now()->format('Ymd_His').'.xlsx');
     }
 
     public function create(): View
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
+        Gate::authorize('create', Shipment::class);
 
-        return view('shipments.create', [
-            'shipment' => new Shipment(),
-            'clients' => Client::orderBy('razon_social')->get(),
-            'endorsementUsers' => User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                ->where('estado', User::ESTADO_ACTIVO)
-                ->orderBy('name')
-                ->get(),
-            'assignmentUsers' => User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                ->where('estado', User::ESTADO_ACTIVO)
-                ->orderBy('name')
-                ->get(),
-            'countries' => Shipment::countryOptions(),
-            'trackingStates' => Shipment::TRACKING_STATES,
-            'endorsementStatuses' => Shipment::ENDORSEMENT_STATUSES,
-            'types' => Shipment::TIPOS_CARGA,
+        $shipment = new Shipment([
+            'estado_actual' => Shipment::TRACKING_STATES[0],
+            'estado_endoso' => 'pendiente',
         ]);
+
+        return view('shipments.create', $this->formData(
+            $shipment,
+            ShipmentFieldAccess::editableOnCreate(auth()->user())
+        ));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
+        Gate::authorize('create', Shipment::class);
 
-        $shipment = Shipment::create($this->validatedData($request));
-        $this->syncAssignments($shipment, $request);
+        $user = $request->user();
+        $editable = ShipmentFieldAccess::editableOnCreate($user);
+        $this->discardEmptyRateRows($request);
+        $validated = $request->validate($this->rulesFor($editable, $request), [], $this->attributeLabels());
+        $client = Client::findOrFail($validated['client_id']);
 
-        ShipmentEvent::create([
-            'shipment_id' => $shipment->id,
-            'estado' => $shipment->estado_actual,
-            'fecha' => now(),
-            'descripcion' => 'Embarque creado en el sistema.',
-            'user_id' => auth()->id(),
-        ]);
+        $shipment = DB::transaction(function () use ($validated, $editable, $client, $user, $request) {
+            $shipment = new Shipment($this->shipmentAttributes($validated));
 
-        return redirect()->route('embarques.show', $shipment)->with('status', 'Embarque creado correctamente.');
+            // Toda RO nace en el primer estado del flujo.
+            $shipment->estado_actual = Shipment::TRACKING_STATES[0];
+            $shipment->estado_endoso = $shipment->estado_endoso ?: 'pendiente';
+
+            // El comercial que registra la RO queda como duenio de la venta.
+            if ($user->isComercial()) {
+                $shipment->comercial_id = $user->id;
+            }
+
+            // Tipo de cambio congelado: el de referencia del dia, salvo que el Admin lo indique.
+            $shipment->tipo_cambio = filled($validated['tipo_cambio'] ?? null)
+                ? $validated['tipo_cambio']
+                : AppSetting::referenceExchangeRate();
+
+            $this->applyCredit($shipment, $client, $validated);
+            $shipment->save();
+
+            if (in_array('rates', $editable, true)) {
+                $this->syncRates($shipment, $validated['rates'] ?? []);
+            }
+
+            if (in_array('responsable_users', $editable, true)) {
+                $this->syncAssignments($shipment, $request);
+            }
+
+            // Primer hito (visible al cliente con su texto estandar).
+            ShipmentEvent::recordState($shipment, $shipment->estado_actual, now(), 'Embarque creado en el sistema.', $user->id);
+
+            return $shipment;
+        });
+
+        return redirect()->route('embarques.show', $shipment)->with('status', 'Routing Order creada correctamente.');
     }
 
     public function show(Shipment $shipment): View
     {
-        $this->authorizeAccess($shipment);
+        Gate::authorize('view', $shipment);
 
         $activeTab = request('tab', 'datos');
 
-        if (! in_array($activeTab, ['datos', 'tracking', 'documentos'], true)) {
+        $canSeeFinance = auth()->user()->can('viewRates', $shipment) || auth()->user()->can('view-provisions');
+
+        if (! in_array($activeTab, ['datos', 'tracking', 'documentos', 'finanzas'], true)
+            || ($activeTab === 'finanzas' && ! $canSeeFinance)) {
             $activeTab = 'datos';
         }
 
@@ -142,124 +220,139 @@ class ShipmentController extends Controller
                 'id',
                 'shipment_id',
                 'estado',
+                'tipo',
+                'visible_cliente',
                 'fecha',
                 'descripcion',
                 'user_id',
             ]);
-        $logbookEvents = $timelineEvents->sortByDesc('fecha')->values();
-        $visibleLogbookEvents = $logbookEvents->take(12)->values();
-        $hiddenLogbookCount = max($logbookEvents->count() - $visibleLogbookEvents->count(), 0);
-
-        $documentCount = $shipment->documents()->count();
-        $endorsementDocumentsPreview = $shipment->documents()
-            ->where('categoria', Document::CATEGORY_ENDOSO)
-            ->latest('created_at')
-            ->limit(4)
-            ->get([
-                'id',
-                'shipment_id',
-                'categoria',
-                'tipo_documento',
-                'nombre_original',
-                'created_at',
-            ]);
-        $endorsementDocumentsCount = $shipment->documents()
-            ->where('categoria', Document::CATEGORY_ENDOSO)
-            ->count();
+        // Encabezado y "Requiere atencion" se muestran en todas las pestanas.
+        $shipment->loadMissing([
+            'containers',
+            'documents.user:id,name',
+            'documents.validatedBy:id,name',
+            'pendingDateChanges.changedBy:id,name',
+            'comercial:id,name,email',
+            'customerService:id,name,email',
+            'operador:id,name,email',
+        ]);
 
         if ($activeTab === 'datos') {
             $shipment->loadMissing([
                 'endorsementResponsible:id,name',
                 'userAssignments.user:id,name',
-                'provisions',
-                'invoices',
+                'cutOffConfirmedBy:id,name',
             ]);
         }
 
-        if ($activeTab === 'documentos') {
-            $shipment->loadMissing(['documents.user:id,name']);
+        if ($activeTab === 'tracking') {
+            $shipment->loadMissing([
+                'notificationLogs' => fn ($query) => $query->limit(15),
+            ]);
+        }
+
+        if ($activeTab === 'finanzas') {
+            $shipment->loadMissing([
+                'comercial:id,name',
+                'rates.concept:id,nombre',
+                'provisions.supplier:id,razon_social',
+                'provisions.concept:id,nombre',
+                'invoices',
+            ]);
         }
 
         return view('shipments.show', [
             'shipment' => $shipment,
             'activeTab' => $activeTab,
             'timelineEvents' => $timelineEvents,
-            'visibleLogbookEvents' => $visibleLogbookEvents,
-            'hiddenLogbookCount' => $hiddenLogbookCount,
-            'documentCount' => $documentCount,
-            'endorsementDocumentsPreview' => $endorsementDocumentsPreview,
-            'endorsementDocumentsCount' => $endorsementDocumentsCount,
             'trackingStates' => Shipment::TRACKING_STATES,
             'endorsementStatuses' => Shipment::ENDORSEMENT_STATUSES,
             'documentCategories' => Document::CATEGORIES,
             'documentTypeSuggestions' => Document::TYPE_SUGGESTIONS,
+            'canSeeFinance' => $canSeeFinance,
         ]);
     }
 
     public function edit(Shipment $shipment): View
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
-        $shipment->loadMissing('userAssignments');
+        Gate::authorize('update', $shipment);
 
-        return view('shipments.edit', [
-            'shipment' => $shipment,
-            'clients' => Client::orderBy('razon_social')->get(),
-            'endorsementUsers' => User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                ->where('estado', User::ESTADO_ACTIVO)
-                ->orderBy('name')
-                ->get(),
-            'assignmentUsers' => User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                ->where('estado', User::ESTADO_ACTIVO)
-                ->orderBy('name')
-                ->get(),
-            'countries' => Shipment::countryOptions(),
-            'trackingStates' => Shipment::TRACKING_STATES,
-            'endorsementStatuses' => Shipment::ENDORSEMENT_STATUSES,
-            'types' => Shipment::TIPOS_CARGA,
-        ]);
+        $shipment->loadMissing(['userAssignments', 'client', 'rates.concept:id,nombre']);
+
+        return view('shipments.edit', $this->formData(
+            $shipment,
+            ShipmentFieldAccess::editableOnUpdate(auth()->user(), $shipment)
+        ));
     }
 
     public function update(Request $request, Shipment $shipment): RedirectResponse
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
+        Gate::authorize('update', $shipment);
 
-        $validated = $this->validatedData($request, $shipment);
+        $user = $request->user();
+        $editable = ShipmentFieldAccess::editableOnUpdate($user, $shipment);
+        $this->discardEmptyRateRows($request);
+        $validated = $request->validate($this->rulesFor($editable, $request, $shipment), [], $this->attributeLabels());
+
         $previousState = $shipment->estado_actual;
-        $shipment->loadMissing('userAssignments');
-        $fieldChanges = $this->resolveShipmentFieldChanges($shipment, $validated);
-        $hadAssignmentChanges = $this->shipmentAssignmentsWillChange($shipment, $request);
+        $shipment->loadMissing(['userAssignments', 'rates']);
+        $canSyncAssignments = in_array('responsable_users', $editable, true);
+        $hadAssignmentChanges = $canSyncAssignments && $this->shipmentAssignmentsWillChange($shipment, $request);
+        $canSyncRates = in_array('rates', $editable, true);
+        $hadRateChanges = $canSyncRates && $this->ratesWillChange($shipment, $validated['rates'] ?? []);
 
-        $shipment->update($validated);
-        $this->syncAssignments($shipment, $request);
+        DB::transaction(function () use ($shipment, $validated, $request, $user, $previousState, $canSyncAssignments, $hadAssignmentChanges, $canSyncRates, $hadRateChanges) {
+            $shipment->fill($this->shipmentAttributes($validated));
 
-        if ($previousState !== $shipment->estado_actual) {
-            ShipmentEvent::create([
-                'shipment_id' => $shipment->id,
-                'estado' => $shipment->estado_actual,
-                'fecha' => now(),
-                'descripcion' => 'Estado actualizado desde la ficha del embarque.',
-                'user_id' => auth()->id(),
-            ]);
-        }
+            // Si el Admin borra el tipo de cambio, se vuelve al de referencia.
+            if (array_key_exists('tipo_cambio', $validated) && blank($validated['tipo_cambio'])) {
+                $shipment->tipo_cambio = AppSetting::referenceExchangeRate();
+            }
 
-        $auditDescription = $this->buildShipmentAuditDescription($fieldChanges, $hadAssignmentChanges);
+            $client = $shipment->isDirty('client_id')
+                ? Client::findOrFail($shipment->client_id)
+                : $shipment->client;
 
-        if ($auditDescription !== null) {
-            ShipmentEvent::create([
-                'shipment_id' => $shipment->id,
-                'estado' => $shipment->estado_actual,
-                'fecha' => now(),
-                'descripcion' => $auditDescription,
-                'user_id' => auth()->id(),
-            ]);
-        }
+            $this->applyCredit($shipment, $client, $validated);
+
+            $fieldChanges = array_keys(Arr::except($shipment->getDirty(), ['updated_at']));
+
+            if ($hadRateChanges) {
+                $fieldChanges[] = 'rates';
+            }
+
+            $shipment->save();
+
+            if ($canSyncAssignments) {
+                $this->syncAssignments($shipment, $request);
+            }
+
+            if ($hadRateChanges) {
+                $this->syncRates($shipment, $validated['rates'] ?? []);
+            }
+
+            // Cambio de estado: hito visible al cliente.
+            if ($previousState !== $shipment->estado_actual) {
+                ShipmentEvent::recordState($shipment, $shipment->estado_actual, now(), 'Estado actualizado desde la ficha del embarque.', $user->id);
+            }
+
+            // Resto de cambios: bitacora interna, nunca visible al cliente.
+            $auditDescription = $this->buildShipmentAuditDescription(
+                array_values(array_diff($fieldChanges, ['estado_actual'])),
+                $hadAssignmentChanges
+            );
+
+            if ($auditDescription !== null) {
+                ShipmentEvent::recordAudit($shipment, $auditDescription, $user->id);
+            }
+        });
 
         return redirect()->route('embarques.show', $shipment)->with('status', 'Embarque actualizado correctamente.');
     }
 
     public function destroy(Shipment $shipment): RedirectResponse
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        Gate::authorize('delete', $shipment);
 
         $shipment->load(['documents', 'invoices']);
 
@@ -282,7 +375,7 @@ class ShipmentController extends Controller
 
     public function togglePin(Shipment $shipment): RedirectResponse
     {
-        $this->authorizeAccess($shipment);
+        Gate::authorize('view', $shipment);
 
         $preference = UserShipmentPreference::firstOrNew([
             'user_id' => auth()->id(),
@@ -300,39 +393,129 @@ class ShipmentController extends Controller
         );
     }
 
-    private function validatedData(Request $request, ?Shipment $shipment = null): array
+    /**
+     * Datos compartidos por los formularios de creacion y edicion.
+     * "editableFields" le dice a la vista que campos bloquear.
+     */
+    private function formData(Shipment $shipment, array $editableFields): array
     {
-        return $request->validate([
-            'client_id' => ['required', 'exists:clients,id'],
+        $activeUsers = fn (array $roles) => User::query()
+            ->whereIn('role', $roles)
+            ->where('estado', User::ESTADO_ACTIVO)
+            ->orderBy('name')
+            ->get(['id', 'name', 'username', 'email', 'role']);
+
+        // Solo clientes aprobados y activos; en edicion se conserva el actual.
+        $clients = Client::query()
+            ->operable()
+            ->when($shipment->client_id, fn ($query) => $query->orWhere('id', $shipment->client_id))
+            ->orderBy('razon_social')
+            ->get(['id', 'razon_social', 'ruc', 'condicion_credito', 'dias_credito']);
+
+        return [
+            'shipment' => $shipment,
+            'editableFields' => $editableFields,
+            'clients' => $clients,
+            'customerUsers' => $activeUsers([User::ROLE_CUSTOMER]),
+            'operatorUsers' => $activeUsers([User::ROLE_OPERACIONES]),
+            'commercialUsers' => $activeUsers([User::ROLE_COMERCIAL, User::ROLE_ADMIN]),
+            'endorsementUsers' => $activeUsers(User::INTERNAL_ROLES),
+            'assignmentUsers' => $activeUsers(User::INTERNAL_ROLES),
+            'countries' => Shipment::countryOptions(),
+            'trackingStates' => Shipment::TRACKING_STATES,
+            'endorsementStatuses' => Shipment::ENDORSEMENT_STATUSES,
+            'types' => Shipment::TIPOS_CARGA,
+            'incoterms' => Shipment::INCOTERMS,
+            'creditConditions' => Client::CREDIT_CONDITIONS,
+            // Conceptos activos y los ya usados por la RO (aunque luego se desactivaran).
+            'rateConcepts' => RateConcept::query()
+                ->where('activo', true)
+                ->when($shipment->exists, fn ($query) => $query->orWhereIn('id', $shipment->rates()->pluck('rate_concept_id')))
+                ->ordered()
+                ->get(['id', 'nombre', 'activo']),
+            'currencies' => ShipmentRate::CURRENCIES,
+            'referenceExchangeRate' => AppSetting::referenceExchangeRate(),
+        ];
+    }
+
+    /**
+     * Reglas de validacion limitadas a los campos que el rol puede editar.
+     * Los campos no permitidos ni siquiera se validan: se ignoran.
+     */
+    private function rulesFor(array $editable, Request $request, ?Shipment $shipment = null): array
+    {
+        $clientId = in_array('client_id', $editable, true)
+            ? $request->integer('client_id')
+            : (int) $shipment?->client_id;
+
+        $activeUserWithRole = fn (array $roles) => Rule::exists('users', 'id')->where(fn ($query) => $query
+            ->whereIn('role', $roles)
+            ->where('estado', User::ESTADO_ACTIVO));
+
+        $rules = [
+            'client_id' => [
+                'required',
+                'integer',
+                function (string $attribute, mixed $value, \Closure $fail) use ($shipment) {
+                    if ($shipment && (int) $value === (int) $shipment->client_id) {
+                        return;
+                    }
+
+                    $client = Client::find($value);
+
+                    if (! $client) {
+                        $fail('El cliente seleccionado no existe.');
+                    } elseif (! $client->canOperate()) {
+                        $fail('El cliente debe estar aprobado por el Administrador y activo para emitir una RO.');
+                    }
+                },
+            ],
             'nro_orden_trabajo' => ['required', 'string', 'max:100', Rule::unique('shipments', 'nro_orden_trabajo')->ignore($shipment)],
             'routing_order' => [
                 'required',
                 'string',
                 'max:100',
                 Rule::unique('shipments', 'routing_order')
-                    ->where(fn ($query) => $query->where('client_id', $request->integer('client_id')))
+                    ->where(fn ($query) => $query->where('client_id', $clientId))
                     ->ignore($shipment),
             ],
             'bl' => [
-                'required',
+                'nullable',
                 'string',
                 'max:100',
                 Rule::unique('shipments', 'bl')
-                    ->where(fn ($query) => $query->where('client_id', $request->integer('client_id')))
+                    ->where(fn ($query) => $query->where('client_id', $clientId))
                     ->ignore($shipment),
             ],
             'tipo_carga' => ['required', Rule::in(Shipment::TIPOS_CARGA)],
+            'incoterm' => ['required', Rule::in(Shipment::INCOTERMS)],
             'origen' => ['required', 'string', 'max:255'],
             'puerto_carga' => ['required', 'string', 'max:255'],
             'puerto_descarga' => ['required', 'string', 'max:255'],
             'destino_final' => ['required', 'string', 'max:255'],
             'naviera' => ['nullable', 'string', 'max:255'],
+            'nave' => ['nullable', 'string', 'max:120'],
+            'viaje' => ['nullable', 'string', 'max:60'],
+            'agente_origen' => ['nullable', 'string', 'max:255'],
             'consignatario' => ['nullable', 'string', 'max:255'],
             'peso' => ['nullable', 'numeric', 'min:0'],
             'volumen' => ['nullable', 'numeric', 'min:0'],
+            'fecha_cut_off' => ['nullable', 'date'],
             'fecha_etd' => ['nullable', 'date'],
-            'fecha_eta' => ['nullable', 'date'],
+            'fecha_eta' => ['nullable', 'date', Rule::when($request->filled('fecha_etd'), ['after_or_equal:fecha_etd'])],
             'fecha_descarga' => ['nullable', 'date'],
+            'dias_libres_demurrage' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'dias_libres_detention' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'dias_libres_almacen' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'ubicacion_actual' => ['nullable', 'string', 'max:255'],
+            'ubicacion_latitud' => ['nullable', 'required_with:ubicacion_longitud', 'numeric', 'between:-90,90'],
+            'ubicacion_longitud' => ['nullable', 'required_with:ubicacion_latitud', 'numeric', 'between:-180,180'],
+            'almacen_direccionamiento' => ['nullable', 'string', 'max:255'],
+            'fecha_tarja' => ['nullable', 'date'],
+            'bultos_tarjados' => ['nullable', 'integer', 'min:0'],
+            'peso_tarjado_kg' => ['nullable', 'numeric', 'min:0'],
+            'fecha_ingreso_almacen' => ['nullable', 'date'],
+            'observacion_tarja' => ['nullable', 'string'],
             'estado_actual' => [
                 'required',
                 Rule::in(Shipment::TRACKING_STATES),
@@ -348,47 +531,138 @@ class ShipmentController extends Controller
             ],
             'estado_endoso' => ['required', Rule::in(Shipment::ENDORSEMENT_STATUSES)],
             'fecha_endoso' => ['nullable', 'date'],
-            'responsable_endoso_id' => [
-                'nullable',
-                Rule::exists('users', 'id')->where(function ($query) {
-                    $query
-                        ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                        ->where('estado', User::ESTADO_ACTIVO);
-                }),
-            ],
+            'responsable_endoso_id' => ['nullable', $activeUserWithRole(User::INTERNAL_ROLES)],
             'observacion_endoso' => ['nullable', 'string'],
             'observaciones' => ['nullable', 'string'],
+            'rates' => ['required', 'array', 'min:1'],
+            'rates.*.rate_concept_id' => ['required', 'integer', Rule::exists('rate_concepts', 'id')],
+            'rates.*.monto' => ['required', 'numeric', 'gt:0', 'max:999999999'],
+            'rates.*.moneda' => ['required', Rule::in(ShipmentRate::CURRENCIES)],
+            'rates.*.observacion' => ['nullable', 'string', 'max:255'],
+            'tipo_cambio' => ['nullable', 'numeric', 'between:1,10'],
+            'customer_id' => ['required', $activeUserWithRole([User::ROLE_CUSTOMER])],
+            'operador_id' => ['nullable', $activeUserWithRole([User::ROLE_OPERACIONES])],
+            'comercial_id' => ['nullable', $activeUserWithRole([User::ROLE_COMERCIAL, User::ROLE_ADMIN])],
+            'condicion_credito' => ['nullable', Rule::in(Client::CREDIT_CONDITIONS)],
+            'dias_credito' => ['nullable', 'required_if:condicion_credito,'.Client::CREDIT_TERM, 'integer', 'min:1', 'max:365'],
             'responsable_users' => ['nullable', 'array'],
-            'responsable_users.*' => [
-                'integer',
-                Rule::exists('users', 'id')->where(function ($query) {
-                    $query
-                        ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                        ->where('estado', User::ESTADO_ACTIVO);
-                }),
-            ],
+            'responsable_users.*' => ['integer', $activeUserWithRole(User::INTERNAL_ROLES)],
             'tracking_users' => ['nullable', 'array'],
-            'tracking_users.*' => [
-                'integer',
-                Rule::exists('users', 'id')->where(function ($query) {
-                    $query
-                        ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERACIONES, User::ROLE_COMERCIAL])
-                        ->where('estado', User::ESTADO_ACTIVO);
-                }),
-            ],
-        ]);
+            'tracking_users.*' => ['integer', $activeUserWithRole(User::INTERNAL_ROLES)],
+        ];
+
+        return array_filter(
+            $rules,
+            fn (string $key) => in_array(explode('.', $key)[0], $editable, true),
+            ARRAY_FILTER_USE_KEY
+        );
     }
 
-    private function authorizeAccess(Shipment $shipment): void
+    private function attributeLabels(): array
     {
-        $user = auth()->user();
+        return [
+            'client_id' => 'cliente',
+            'customer_id' => 'Customer Service',
+            'operador_id' => 'operador',
+            'comercial_id' => 'comercial',
+            'condicion_credito' => 'condicion de credito',
+            'dias_credito' => 'dias de credito',
+            'fecha_etd' => 'ETD',
+            'fecha_eta' => 'ETA',
+            'fecha_cut_off' => 'cut-off',
+            'dias_libres_demurrage' => 'días libres de demurrage',
+            'dias_libres_detention' => 'días libres de detention',
+            'dias_libres_almacen' => 'días libres de almacén',
+            'ubicacion_latitud' => 'latitud',
+            'ubicacion_longitud' => 'longitud',
+            'peso' => 'peso (kg)',
+            'volumen' => 'volumen (CBM)',
+            'rates' => 'tarifas de venta',
+            'rates.*.rate_concept_id' => 'concepto de la tarifa',
+            'rates.*.monto' => 'monto de la tarifa',
+            'rates.*.moneda' => 'moneda de la tarifa',
+            'tipo_cambio' => 'tipo de cambio',
+        ];
+    }
 
-        if ($user->role === User::ROLE_CLIENTE && $shipment->client_id !== $user->client_id) {
-            abort(403);
+    /** Quita las filas de tarifa vacias que deja el formulario dinamico. */
+    private function discardEmptyRateRows(Request $request): void
+    {
+        if (! $request->has('rates')) {
+            return;
+        }
+
+        $rows = collect((array) $request->input('rates'))
+            ->filter(fn ($row) => is_array($row) && (filled($row['rate_concept_id'] ?? null) || filled($row['monto'] ?? null)))
+            ->values()
+            ->all();
+
+        $request->merge(['rates' => $rows]);
+    }
+
+    private function normalizedRates(iterable $rates): array
+    {
+        return collect($rates)
+            ->map(fn ($rate) => [
+                'rate_concept_id' => (int) data_get($rate, 'rate_concept_id'),
+                'monto' => number_format((float) data_get($rate, 'monto'), 2, '.', ''),
+                'moneda' => (string) data_get($rate, 'moneda'),
+                'observacion' => filled(data_get($rate, 'observacion')) ? trim((string) data_get($rate, 'observacion')) : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function ratesWillChange(Shipment $shipment, array $rates): bool
+    {
+        return $this->normalizedRates($shipment->rates) !== $this->normalizedRates($rates);
+    }
+
+    /** Reemplaza las tarifas de venta de la RO por las enviadas en el formulario. */
+    private function syncRates(Shipment $shipment, array $rates): void
+    {
+        $shipment->rates()->delete();
+
+        foreach ($this->normalizedRates($rates) as $rate) {
+            $shipment->rates()->create($rate);
         }
     }
 
-    private function buildIndexQuery(User $user, string $search, mixed $clientId, string $lifecycle)
+    private function shipmentAttributes(array $validated): array
+    {
+        return Arr::except($validated, self::NON_ATTRIBUTE_FIELDS);
+    }
+
+    /**
+     * Condicion de credito del embarque:
+     * - Por defecto se hereda de la ficha del cliente.
+     * - Si el Admin la define, se fuerza solo para este embarque.
+     * - Si el Admin la deja vacia, vuelve a heredarse.
+     */
+    private function applyCredit(Shipment $shipment, Client $client, array $validated): void
+    {
+        $adminDefinesCredit = array_key_exists('condicion_credito', $validated);
+
+        if ($adminDefinesCredit && filled($validated['condicion_credito'])) {
+            $shipment->overrideCredit(
+                $client,
+                $validated['condicion_credito'],
+                isset($validated['dias_credito']) ? (int) $validated['dias_credito'] : null
+            );
+
+            return;
+        }
+
+        $mustInherit = ! $shipment->exists
+            || $adminDefinesCredit
+            || ($shipment->isDirty('client_id') && ! $shipment->credito_forzado);
+
+        if ($mustInherit) {
+            $shipment->inheritCreditFrom($client);
+        }
+    }
+
+    private function buildIndexQuery(User $user, string $search, mixed $clientId, string $lifecycle, string $type = '', bool $onlyMine = false)
     {
         $preferences = UserShipmentPreference::query()
             ->select(['shipment_id', 'is_pinned'])
@@ -413,11 +687,9 @@ class ShipmentController extends Controller
                 $shipmentQuery
                     ->where('nro_orden_trabajo', 'like', "%{$search}%")
                     ->orWhere('bl', 'like', "%{$search}%")
-                    ->orWhere('routing_order', 'like', "%{$search}%");
-
-                if (Shipment::hasTrackingCodeColumn()) {
-                    $shipmentQuery->orWhere('tracking_code', 'like', "%{$search}%");
-                }
+                    ->orWhere('routing_order', 'like', "%{$search}%")
+                    ->orWhere('nave', 'like', "%{$search}%")
+                    ->orWhere('tracking_code', 'like', "%{$search}%");
             });
         }
 
@@ -425,6 +697,14 @@ class ShipmentController extends Controller
             $query->where('estado_actual', '!=', 'Finalizado');
         } elseif ($lifecycle === 'finished') {
             $query->where('estado_actual', 'Finalizado');
+        }
+
+        if ($type !== '') {
+            $query->where('shipments.tipo_carga', $type);
+        }
+
+        if ($onlyMine) {
+            $query->linkedTo($user);
         }
 
         return $query;
@@ -463,21 +743,7 @@ class ShipmentController extends Controller
             ])
             ->all();
 
-        $syncPayload = $responsablePayload + $trackingPayload;
-
-        $shipment->assignedUsers()->sync($syncPayload);
-    }
-
-    private function resolveShipmentFieldChanges(Shipment $shipment, array $validated): array
-    {
-        $probe = $shipment->replicate();
-        $probe->exists = true;
-        $probe->fill($validated);
-
-        return collect(array_keys($probe->getDirty()))
-            ->reject(fn (string $field) => $field === 'updated_at')
-            ->values()
-            ->all();
+        $shipment->assignedUsers()->sync($responsablePayload + $trackingPayload);
     }
 
     private function shipmentAssignmentsWillChange(Shipment $shipment, Request $request): bool
@@ -537,27 +803,51 @@ class ShipmentController extends Controller
     {
         return [
             'client_id' => 'cliente',
+            'comercial_id' => 'comercial',
+            'customer_id' => 'customer service',
+            'operador_id' => 'operador',
             'nro_orden_trabajo' => 'OT',
             'routing_order' => 'routing order',
             'bl' => 'BL',
             'tipo_carga' => 'tipo de carga',
+            'incoterm' => 'incoterm',
+            'condicion_credito' => 'condicion de credito',
+            'dias_credito' => 'dias de credito',
             'origen' => 'pais de origen',
             'puerto_carga' => 'puerto de carga',
             'puerto_descarga' => 'puerto de descarga',
             'destino_final' => 'pais de llegada',
             'naviera' => 'naviera',
+            'nave' => 'nave',
+            'viaje' => 'viaje',
+            'agente_origen' => 'agente de origen',
             'consignatario' => 'consignatario',
             'peso' => 'peso',
             'volumen' => 'volumen',
+            'fecha_cut_off' => 'cut-off',
             'fecha_etd' => 'ETD',
             'fecha_eta' => 'ETA',
             'fecha_descarga' => 'fecha de descarga',
+            'dias_libres_demurrage' => 'dias libres de demurrage',
+            'dias_libres_detention' => 'dias libres de detention',
+            'dias_libres_almacen' => 'dias libres de almacen',
+            'ubicacion_actual' => 'ubicacion actual',
+            'ubicacion_latitud' => 'ubicacion actual',
+            'ubicacion_longitud' => 'ubicacion actual',
+            'almacen_direccionamiento' => 'almacen de direccionamiento',
+            'fecha_tarja' => 'tarja',
+            'bultos_tarjados' => 'tarja',
+            'peso_tarjado_kg' => 'tarja',
+            'fecha_ingreso_almacen' => 'ingreso a almacen',
+            'observacion_tarja' => 'tarja',
             'estado_actual' => 'estado actual',
             'estado_endoso' => 'estado de endoso',
             'fecha_endoso' => 'fecha de endoso',
             'responsable_endoso_id' => 'responsable de endoso',
             'observacion_endoso' => 'observacion de endoso',
             'observaciones' => 'observaciones',
+            'rates' => 'tarifas de venta',
+            'tipo_cambio' => 'tipo de cambio',
         ][$field] ?? null;
     }
 }

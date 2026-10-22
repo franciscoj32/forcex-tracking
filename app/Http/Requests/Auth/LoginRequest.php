@@ -55,8 +55,7 @@ class LoginRequest extends FormRequest
 
         if (
             ! $user
-            || ! $user->isActive()
-            || $user->role === User::ROLE_CLIENTE
+            || ! $user->canAccessBackoffice()
             || ! Auth::attempt(['email' => $user->email, 'password' => $this->string('password')->toString()], $this->boolean('remember'))
         ) {
             RateLimiter::hit($this->throttleKey());

@@ -12,8 +12,9 @@ class ShipmentCountryAutocompleteTest extends TestCase
 
     public function test_shipment_form_exposes_country_autocomplete_options(): void
     {
+        // La RO la registra el Comercial.
         $user = User::factory()->create([
-            'role' => User::ROLE_OPERACIONES,
+            'role' => User::ROLE_COMERCIAL,
             'estado' => User::ESTADO_ACTIVO,
         ]);
 

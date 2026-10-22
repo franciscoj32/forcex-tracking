@@ -14,9 +14,12 @@ class Invoice extends Model
         'shipment_id',
         'numero',
         'monto',
+        'moneda',
         'estado',
         'archivo_pdf',
     ];
+
+    public const CURRENCIES = ['USD', 'PEN'];
 
     protected function casts(): array
     {

@@ -4,35 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Models\Shipment;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
 {
-    public function overview(): View
+    /** Los documentos se ven en la pestana Documentos de cada embarque. */
+    public function overview(): RedirectResponse
     {
-        $query = Shipment::with(['client', 'documents' => fn ($builder) => $builder->latest()])
-            ->whereHas('documents')
-            ->latest('updated_at');
-
-        if (auth()->user()->role === User::ROLE_CLIENTE) {
-            $query->where('client_id', auth()->user()->client_id);
-        }
-
-        return view('documents.overview', [
-            'shipments' => $query->paginate(12),
-        ]);
+        return redirect()->route('embarques.index');
     }
 
     public function index(Shipment $shipment): RedirectResponse
     {
-        $this->authorizeAccess($shipment);
+        Gate::authorize('view', $shipment);
 
         return redirect()->route('embarques.show', [
             'shipment' => $shipment,
@@ -42,7 +32,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, Shipment $shipment): RedirectResponse
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
+        Gate::authorize('manageDocuments', $shipment);
 
         $data = $request->validate([
             'categoria' => ['required', Rule::in(Document::CATEGORIES)],
@@ -76,7 +66,7 @@ class DocumentController extends Controller
     public function download(Document $document): StreamedResponse
     {
         $document->load('shipment');
-        $this->authorizeAccess($document->shipment);
+        Gate::authorize('view', $document->shipment);
 
         abort_unless(Storage::disk('private')->exists($document->ruta), 404);
 
@@ -85,9 +75,8 @@ class DocumentController extends Controller
 
     public function destroy(Document $document): RedirectResponse
     {
-        abort_unless(auth()->user()->hasRole([User::ROLE_ADMIN, User::ROLE_OPERACIONES]), 403);
-
         $shipment = $document->shipment;
+        Gate::authorize('manageDocuments', $shipment);
 
         if (Storage::disk('private')->exists($document->ruta)) {
             Storage::disk('private')->delete($document->ruta);
@@ -99,14 +88,5 @@ class DocumentController extends Controller
             'shipment' => $shipment,
             'tab' => 'documentos',
         ])->with('status', 'Documento eliminado correctamente.');
-    }
-
-    private function authorizeAccess(Shipment $shipment): void
-    {
-        $user = auth()->user();
-
-        if ($user->role === User::ROLE_CLIENTE && $shipment->client_id !== $user->client_id) {
-            abort(403);
-        }
     }
 }

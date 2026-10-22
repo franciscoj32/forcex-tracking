@@ -1,210 +1,174 @@
+{{-- Resumen del embarque. Lo que ya esta en el encabezado no se repite aqui. --}}
 @php
-    $fieldRowClass = 'grid gap-x-3 gap-y-1 md:grid-cols-[140px_minmax(0,1fr)] lg:grid-cols-[148px_minmax(0,1fr)] md:items-start';
-    $fieldLabelClass = 'text-sm font-medium leading-5 text-slate-500';
-    $fieldValueClass = 'min-w-0 text-sm leading-6 text-slate-900 break-words';
-    $fieldValueStrongClass = $fieldValueClass . ' font-semibold';
+    $dash = '—';
+    $date = fn ($value, string $format = 'd/m/Y') => $value?->format($format) ?? $dash;
+    $responsibles = $shipment->userAssignments->where('assignment_type', \App\Models\ShipmentUserAssignment::TYPE_RESPONSABLE)->pluck('user.name')->filter();
+    $followers = $shipment->userAssignments->where('assignment_type', \App\Models\ShipmentUserAssignment::TYPE_SEGUIMIENTO)->pluck('user.name')->filter();
+    $publishedDiffers = fn ($internal, $published) => optional($internal)->toDateString() !== optional($published)->toDateString();
+    $row = 'flex items-baseline justify-between gap-4 py-1.5';
+    $dt = 'shrink-0 text-slate-500';
+    $dd = 'min-w-0 text-right text-slate-900 break-words';
+    // Cuenta regresiva de cada plazo (viene de show.blade.php, mismo calculo que las alertas).
+    $deadline = fn (string $type) => $shipmentAlerts->first(fn ($alert) => $alert->type === $type && $alert->dueAt !== null);
 @endphp
 
-<div class="space-y-6">
-    <div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section class="rounded-3xl border border-slate-200 bg-white">
-            <div class="border-b border-slate-200 px-5 py-4">
-                <h3 class="text-lg font-semibold text-slate-900">Ficha del embarque</h3>
-            </div>
-            <dl class="divide-y divide-slate-100">
-                <div class="grid gap-2 px-5 py-3 {{ $fieldRowClass }}">
-                    <dt class="{{ $fieldLabelClass }}">Cliente</dt>
-                    <dd class="{{ $fieldValueStrongClass }}">{{ $shipment->client->razon_social }}</dd>
+<div class="space-y-4">
+    @include('shipments.partials.date-changes')
+
+    <div class="grid gap-4 lg:grid-cols-3">
+        <section class="fx-card">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Carga y ruta</h2>
+            <dl class="divide-y divide-slate-100 px-4 py-1">
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Incoterm</dt><dd class="{{ $dd }}">{{ $shipment->incoterm ?: $dash }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">País origen → llegada</dt><dd class="{{ $dd }}">{{ $shipment->origen }} → {{ $shipment->destino_final }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">{{ $shipment->isAirCargo() ? 'Aerolínea' : 'Naviera' }}</dt><dd class="{{ $dd }}">{{ $shipment->naviera ?: $dash }}</dd></div>
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">{{ $shipment->isAirCargo() ? 'Vuelo · viaje' : 'Nave · viaje' }}</dt>
+                    <dd class="{{ $dd }}">
+                        @if ($shipment->nave)
+                            <a href="{{ route('embarques.masivo', ['nave' => $shipment->nave, 'viaje' => $shipment->viaje]) }}" class="hover:underline" title="Ver las RO de este buque">{{ $shipment->nave }}</a>
+                            · {{ $shipment->viaje ?: $dash }}
+                        @else
+                            {{ $dash }}
+                        @endif
+                    </dd>
                 </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">BL</dt>
-                        <dd class="{{ $fieldValueStrongClass }}">{{ $shipment->bl }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Routing Order</dt>
-                        <dd class="{{ $fieldValueStrongClass }}">{{ $shipment->routing_order }}</dd>
-                    </div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Agente de origen</dt><dd class="{{ $dd }}">{{ $shipment->agente_origen ?: $dash }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Consignatario</dt><dd class="{{ $dd }}">{{ $shipment->consignatario ?: $dash }}</dd></div>
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">Peso · volumen</dt>
+                    <dd class="{{ $dd }} tabular-nums">
+                        {{ $shipment->peso ? $shipment->weightInTons() : $dash }} · {{ $shipment->volumen ? number_format($shipment->volumen, 2).' CBM' : $dash }}
+                    </dd>
                 </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Origen</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->origen }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Destino final</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->destino_final }}</dd>
-                    </div>
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">Dónde está</dt>
+                    <dd class="{{ $dd }}">
+                        {{ $shipment->ubicacion_actual ?: $dash }}
+                        @if ($shipment->ubicacion_actual && $shipment->locationMapUrl())
+                            <a href="{{ $shipment->locationMapUrl() }}" target="_blank" rel="noopener noreferrer" class="fx-btn-link-primary ml-1">mapa</a>
+                        @endif
+                        @if ($shipment->ubicacion_actualizada_en)
+                            <span class="block text-xs text-slate-500">{{ $shipment->ubicacion_actualizada_en->format('d/m H:i') }}</span>
+                        @endif
+                    </dd>
                 </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Puerto de carga</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->puerto_carga }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Puerto de descarga</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->puerto_descarga }}</dd>
-                    </div>
-                </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Tipo de carga</dt>
-                        <dd class="{{ $fieldValueStrongClass }}">{{ $shipment->tipo_carga }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Naviera</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->naviera ?: '-' }}</dd>
-                    </div>
-                </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Consignatario</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ $shipment->consignatario ?: '-' }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">Peso / Volumen</dt>
-                        <dd class="{{ $fieldValueClass }}">
-                            <span class="block">{{ $shipment->peso ? number_format($shipment->peso, 2) . ' kg' : '-' }}</span>
-                            <span class="block">{{ $shipment->volumen ? number_format($shipment->volumen, 2) . ' m3' : '-' }}</span>
-                        </dd>
-                    </div>
-                </div>
-                <div class="grid gap-2 px-5 py-3 md:grid-cols-2 md:gap-6">
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">ETD</dt>
-                        <dd class="{{ $fieldValueClass }}">{{ optional($shipment->fecha_etd)->format('d/m/Y') ?: '-' }}</dd>
-                    </div>
-                    <div class="{{ $fieldRowClass }}">
-                        <dt class="{{ $fieldLabelClass }}">ETA / Descarga</dt>
-                        <dd class="{{ $fieldValueClass }}">
-                            <span class="block">{{ optional($shipment->fecha_eta)->format('d/m/Y') ?: '-' }}</span>
-                            <span class="block">{{ optional($shipment->fecha_descarga)->format('d/m/Y') ?: '-' }}</span>
-                        </dd>
-                    </div>
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">Crédito</dt>
+                    <dd class="{{ $dd }}">{{ $shipment->creditLabel() }}@if ($shipment->credito_forzado) <span class="text-xs text-amber-700">(forzado por Admin)</span>@endif</dd>
                 </div>
             </dl>
         </section>
-        <div class="space-y-6">
-            <div class="hidden rounded-3xl border border-slate-200 p-5 lg:block">
-                <h3 class="text-lg font-semibold text-slate-900">Observaciones generales</h3>
-                <p class="mt-3 text-sm leading-6 text-slate-600">{{ $shipment->observaciones ?: '-' }}</p>
-            </div>
 
-            <div class="rounded-3xl border border-slate-200 p-5">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">Control de endoso</h3>
-                    </div>
-                    <span class="fx-badge {{ $shipment->estado_endoso === 'completado' ? 'bg-emerald-100 text-emerald-700' : ($shipment->estado_endoso === 'en_proceso' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700') }}">
-                        {{ ucfirst(str_replace('_', ' ', $shipment->estado_endoso)) }}
-                    </span>
+        <section class="fx-card scroll-mt-20" id="plazos">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Fechas y almacén</h2>
+            <dl class="divide-y divide-slate-100 px-4 py-1 tabular-nums">
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">Cut-off</dt>
+                    <dd class="{{ $dd }}">
+                        {{ $date($shipment->fecha_cut_off, 'd/m/Y H:i') }}
+                        @include('alerts.countdown', ['alert' => $deadline(\App\Services\Alerts\Alert::CUT_OFF)])
+                        @if ($shipment->cut_off_cumplido_en)
+                            <span class="block text-xs font-medium text-accent-700">
+                                Cumplido · {{ $shipment->cut_off_cumplido_en->format('d/m H:i') }}{{ $shipment->cutOffConfirmedBy ? ' · '.$shipment->cutOffConfirmedBy->name : '' }}
+                            </span>
+                            @can('confirmCutOff', $shipment)
+                                <form method="POST" action="{{ route('embarques.cut-off.destroy', $shipment) }}" class="inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-xs text-slate-500 hover:text-slate-900 hover:underline">Desmarcar</button>
+                                </form>
+                            @endcan
+                        @else
+                            @can('confirmCutOff', $shipment)
+                                <form method="POST" action="{{ route('embarques.cut-off.store', $shipment) }}" class="mt-0.5">
+                                    @csrf
+                                    <button type="submit" class="fx-btn-link-primary text-xs">Marcar cumplido</button>
+                                </form>
+                            @endcan
+                        @endif
+                    </dd>
                 </div>
-                <div class="mt-5 grid gap-4 md:grid-cols-3">
-                    <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Fecha de endoso</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ optional($shipment->fecha_endoso)->format('d/m/Y') ?: 'Sin fecha' }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Responsable</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ $shipment->endorsementResponsible?->name ?: 'Sin asignar' }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Documentos de endoso</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ $endorsementDocumentsCount }}</p>
-                    </div>
+                @if ($shipment->fecha_eta_original && $publishedDiffers($shipment->fecha_eta_original, $shipment->fecha_eta))
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">ETA original</dt><dd class="{{ $dd }}">{{ $date($shipment->fecha_eta_original) }}</dd></div>
+                @endif
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">ETD que ve el cliente</dt>
+                    <dd @class([$dd, 'font-medium text-amber-700' => $publishedDiffers($shipment->fecha_etd, $shipment->fecha_etd_cliente)])>{{ $date($shipment->fecha_etd_cliente) }}</dd>
                 </div>
-                <div class="mt-4 rounded-2xl bg-amber-50 px-4 py-4 text-sm text-slate-700">
-                    {{ $shipment->observacion_endoso ?: '-' }}
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">ETA que ve el cliente</dt>
+                    <dd @class([$dd, 'font-medium text-amber-700' => $publishedDiffers($shipment->fecha_eta, $shipment->fecha_eta_cliente)])>{{ $date($shipment->fecha_eta_cliente) }}</dd>
                 </div>
-            </div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Descarga</dt><dd class="{{ $dd }}">{{ $date($shipment->fecha_descarga) }}</dd></div>
+                @if ($shipment->tipo_carga === 'FCL')
+                    <div class="{{ $row }}">
+                        <dt class="{{ $dt }}">Días libres demurrage · detention</dt>
+                        <dd class="{{ $dd }}">
+                            {{ $shipment->dias_libres_demurrage ?? $dash }} · {{ $shipment->dias_libres_detention ?? $dash }}
+                            @include('alerts.countdown', ['alert' => $deadline(\App\Services\Alerts\Alert::DEMURRAGE), 'prefix' => 'Demurrage'])
+                            @include('alerts.countdown', ['alert' => $deadline(\App\Services\Alerts\Alert::DETENTION), 'prefix' => 'Detention'])
+                        </dd>
+                    </div>
+                @endif
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Almacén</dt><dd class="{{ $dd }}">{{ $shipment->almacen_direccionamiento ?: $dash }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Tarja</dt><dd class="{{ $dd }}">{{ $shipment->fecha_tarja ? $shipment->fecha_tarja->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Ingreso a almacén</dt><dd class="{{ $dd }}">{{ $date($shipment->fecha_ingreso_almacen, 'd/m/Y H:i') }}</dd></div>
+                <div class="{{ $row }}">
+                    <dt class="{{ $dt }}">Días libres de almacén</dt>
+                    <dd class="{{ $dd }}">
+                        {{ $shipment->dias_libres_almacen ?? $dash }}
+                        @include('alerts.countdown', ['alert' => $deadline(\App\Services\Alerts\Alert::STORAGE)])
+                    </dd>
+                </div>
+                @if ($shipment->hasTarja())
+                    <div class="{{ $row }}">
+                        <dt class="{{ $dt }}">Bultos · peso tarjado</dt>
+                        <dd class="{{ $dd }}">{{ $shipment->bultos_tarjados ?? $dash }} · {{ $shipment->peso_tarjado_kg !== null ? \App\Models\Shipment::formatTons($shipment->peso_tarjado_kg) : $dash }}</dd>
+                    </div>
+                @endif
+            </dl>
+        </section>
 
-            <div class="rounded-3xl border border-slate-200 p-5">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">Usuarios vinculados</h3>
+        <section class="fx-card">
+            <h2 class="fx-section-title border-b border-slate-200 px-4 py-3">Responsables y endoso</h2>
+            <dl class="divide-y divide-slate-100 px-4 py-1">
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Comercial</dt><dd class="{{ $dd }}">{{ $shipment->comercial?->name ?? 'Venta directa' }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Customer Service</dt><dd class="{{ $dd }}">{{ $shipment->customerService?->name ?? $dash }}</dd></div>
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Operador</dt><dd class="{{ $dd }}">{{ $shipment->operador?->name ?? 'Sin asignar' }}</dd></div>
+                @if ($responsibles->isNotEmpty() || $followers->isNotEmpty())
+                    <div class="{{ $row }}"><dt class="{{ $dt }}">Reciben alertas</dt><dd class="{{ $dd }}">{{ $responsibles->merge($followers)->unique()->join(', ') }}</dd></div>
+                @endif
+                <div class="{{ $row }}"><dt class="{{ $dt }}">Endoso</dt><dd class="{{ $dd }}">{{ ucfirst(str_replace('_', ' ', (string) $shipment->estado_endoso)) }}</dd></div>
+                @if ($shipment->fecha_endoso || $shipment->endorsementResponsible)
+                    <div class="{{ $row }}">
+                        <dt class="{{ $dt }}">Fecha · responsable endoso</dt>
+                        <dd class="{{ $dd }}">{{ $date($shipment->fecha_endoso) }} · {{ $shipment->endorsementResponsible?->name ?? $dash }}</dd>
                     </div>
-                    <span class="fx-badge bg-slate-100 text-slate-700">{{ $shipment->userAssignments->count() }} usuario(s)</span>
-                </div>
-
-                <div class="mt-5 grid gap-4">
-                    <div>
-                        <p class="text-sm font-semibold text-slate-500">Responsables</p>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            @forelse ($responsibleAssignments as $assignment)
-                                <span class="rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-700">
-                                    {{ $assignment->user->name }}
-                                </span>
-                            @empty
-                                <p class="text-sm text-slate-500">No hay responsables asignados todavia.</p>
-                            @endforelse
-                        </div>
-                    </div>
-
-                    <div>
-                        <p class="text-sm font-semibold text-slate-500">Seguimiento</p>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            @forelse ($trackingAssignments as $assignment)
-                                <span class="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
-                                    {{ $assignment->user->name }}
-                                </span>
-                            @empty
-                                <p class="text-sm text-slate-500">No hay usuarios en seguimiento todavia.</p>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                @endif
+            </dl>
+        </section>
     </div>
 
-    @if (auth()->user()->role !== 'cliente')
-        <div class="grid gap-6 lg:grid-cols-2">
-            <div class="rounded-3xl border border-slate-200">
-                <div class="border-b border-slate-200 px-5 py-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Provisiones</h3>
-                </div>
-                <div class="space-y-3 p-5">
-                    @forelse ($shipment->provisions as $provision)
-                        <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                            <div class="flex items-center justify-between gap-3">
-                                <p class="font-semibold text-slate-900">S/ {{ number_format($provision->monto, 2) }}</p>
-                                <span class="fx-badge {{ $provision->estado === 'pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
-                                    {{ ucfirst($provision->estado) }}
-                                </span>
-                            </div>
-                            <p class="mt-2 text-sm text-slate-500">{{ $provision->descripcion }}</p>
-                        </div>
-                    @empty
-                        <p class="text-sm text-slate-500">Sin provisiones registradas.</p>
-                    @endforelse
-                </div>
-            </div>
+    @unless ($shipment->isAirCargo())
+        @include('shipments.partials.containers')
+    @endunless
 
-            <div class="rounded-3xl border border-slate-200">
-                <div class="border-b border-slate-200 px-5 py-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Facturacion</h3>
+    @php
+        $notes = array_filter([
+            'Observaciones internas' => $shipment->observaciones,
+            'Observación de tarja' => $shipment->observacion_tarja,
+            'Observación de endoso' => $shipment->observacion_endoso,
+        ]);
+    @endphp
+    @if ($notes !== [])
+        <section class="fx-card divide-y divide-slate-100">
+            @foreach ($notes as $label => $text)
+                <div class="px-4 py-3">
+                    <h2 class="text-sm font-medium text-slate-500">{{ $label }}</h2>
+                    <p class="mt-1 whitespace-pre-line text-slate-800">{{ $text }}</p>
                 </div>
-                <div class="space-y-3 p-5">
-                    @forelse ($shipment->invoices as $invoice)
-                        <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                            <div class="flex items-center justify-between gap-3">
-                                <p class="font-semibold text-slate-900">{{ $invoice->numero }}</p>
-                                <span class="fx-badge {{ $invoice->estado === 'pagada' ? 'bg-emerald-100 text-emerald-700' : ($invoice->estado === 'emitida' ? 'bg-cyan-100 text-cyan-700' : 'bg-amber-100 text-amber-700') }}">
-                                    {{ ucfirst($invoice->estado) }}
-                                </span>
-                            </div>
-                            <p class="mt-2 text-sm text-slate-500">S/ {{ number_format($invoice->monto, 2) }}</p>
-                        </div>
-                    @empty
-                        <p class="text-sm text-slate-500">Sin facturas registradas.</p>
-                    @endforelse
-                </div>
-            </div>
-        </div>
+            @endforeach
+        </section>
     @endif
-
-    <div class="rounded-3xl border border-slate-200 p-5 lg:hidden">
-        <h3 class="text-lg font-semibold text-slate-900">Observaciones generales</h3>
-        <p class="mt-3 text-sm leading-6 text-slate-600">{{ $shipment->observaciones ?: '-' }}</p>
-    </div>
 </div>

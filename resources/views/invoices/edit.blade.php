@@ -1,9 +1,8 @@
 <x-app-layout>
-    <x-slot name="header"><h1 class="text-2xl font-semibold text-slate-900">Editar factura</h1></x-slot>
-    <div class="fx-card fx-card-body">
-        <form method="POST" action="{{ route('facturacion.update', $invoice) }}" enctype="multipart/form-data" data-disable-native-autocomplete="true">
-            @method('PUT')
-            @include('invoices._form')
-        </form>
-    </div>
+    <x-slot name="header"><h1>Editar factura {{ $invoice->numero }}</h1></x-slot>
+
+    <form method="POST" action="{{ route('facturacion.update', $invoice) }}" enctype="multipart/form-data" data-disable-native-autocomplete="true" class="max-w-4xl">
+        @method('PUT')
+        @include('invoices._form')
+    </form>
 </x-app-layout>

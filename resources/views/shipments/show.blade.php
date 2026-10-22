@@ -1,384 +1,249 @@
 ﻿@php
-    $currentStateIndex = array_search($shipment->estado_actual, $trackingStates, true);
-    $currentStateIndex = $currentStateIndex === false ? 0 : $currentStateIndex;
-    $timelineByState = $timelineEvents->groupBy('estado')->map(fn ($events) => $events->last());
-    $completedStateIndexes = collect(range(0, $currentStateIndex))->reverse()->values();
-    $currentEvent = $timelineByState->get($shipment->estado_actual);
-    $nextState = $trackingStates[$currentStateIndex + 1] ?? null;
-    $lastEventAt = optional($timelineEvents->last()?->fecha)->format('d/m/Y H:i') ?: 'Sin movimientos';
-    $canOperate = auth()->user()->hasRole(['admin', 'operaciones']);
-    $canViewTrackingCode = $shipment->canRevealTrackingCodeTo(auth()->user());
+    $user = auth()->user();
+    $currentStateIndex = $shipment->currentTrackingStateIndex();
+    $stateCount = count($trackingStates);
+    // Solo los hitos definen el recorrido; auditorias y notas no son estados.
+    $timelineByState = $timelineEvents
+        ->where('tipo', \App\Models\ShipmentEvent::TYPE_STATE)
+        ->groupBy('estado')
+        ->map(fn ($events) => $events->last());
+    $canEditShipment = $user->can('update', $shipment);
+    $canTrack = $user->can('registerTracking', $shipment);
+    $canCommunicate = $user->can('communicateWithClient', $shipment);
+    $canManageDocuments = $user->can('manageDocuments', $shipment);
+    $canViewTrackingCode = $shipment->canRevealTrackingCodeTo($user);
+
     $initialTab = $activeTab ?? request('tab', 'datos');
     if ($errors->any()) {
-        if ($errors->has('categoria') || $errors->has('tipo_documento') || $errors->has('archivo')) {
+        if (in_array(old('_form'), ['provision', 'invoice'], true) && $canSeeFinance) {
+            $initialTab = 'finanzas';
+        } elseif ($errors->hasAny(['categoria', 'tipo_documento', 'archivo'])) {
             $initialTab = 'documentos';
-        } elseif ($errors->has('estado') || $errors->has('fecha') || $errors->has('descripcion')) {
+        } elseif ($errors->hasAny(['estado', 'fecha', 'descripcion', 'nota'])) {
             $initialTab = 'tracking';
         }
     }
-    $documentFormHasErrors = $errors->has('categoria') || $errors->has('tipo_documento') || $errors->has('archivo');
-    $documentToastMessage = $initialTab === 'documentos' && is_string(session('status')) && str_contains(session('status'), 'Documento')
-        ? session('status')
-        : null;
-    $activeTabClasses = 'rounded-2xl bg-cyan-600 px-5 py-3 text-base font-semibold text-white shadow-sm shadow-cyan-200/80 ring-2 ring-cyan-100';
-    $inactiveTabClasses = 'rounded-2xl px-5 py-3 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900';
-    $responsibleAssignments = collect();
-    $trackingAssignments = collect();
-    $trackingStateOptions = collect();
+    $documentFormHasErrors = $errors->hasAny(['categoria', 'tipo_documento', 'archivo']);
+
+    $attention = \App\Support\ShipmentAttention::for($shipment, $user);
+    // Plazos de la RO (alertas criticas). Los lejanos ("none") solo van como cuenta regresiva en Resumen.
+    $now = \Carbon\CarbonImmutable::now();
+    $shipmentAlerts = \App\Services\Alerts\AlertBoard::make()->forShipment($shipment, $now);
+    $visibleAlerts = $shipmentAlerts->where('level', '!=', \App\Services\Alerts\AlertLevel::NONE)->values();
+    $missingDocuments = \App\Support\ShipmentAttention::missingRequiredDocuments($shipment);
+    $validationQueue = \App\Support\ShipmentAttention::documentValidationQueue($shipment);
+    $isFinished = $shipment->estado_actual === 'Finalizado';
+    $beforeArrival = in_array($shipment->estado_actual, \App\Models\Shipment::statesBeforeArrival(), true);
+    $isDelayed = $beforeArrival && $shipment->fecha_eta && $shipment->fecha_eta->lt(now()->startOfDay());
+    $etaDiffers = optional($shipment->fecha_eta)->toDateString() !== optional($shipment->fecha_eta_cliente)->toDateString();
+    $cargoLabel = $shipment->tipo_carga === 'AEREO' ? 'Aéreo' : $shipment->tipo_carga;
+    $route = ($shipment->puerto_carga ?: $shipment->origen).' → '.($shipment->puerto_descarga ?: $shipment->destino_final);
+
+    $tabs = [
+        'datos' => ['label' => 'Resumen', 'icon' => 'summary', 'badge' => null],
+        'tracking' => ['label' => 'Seguimiento', 'icon' => 'tracking', 'badge' => null],
+        'documentos' => ['label' => 'Documentos', 'icon' => 'documents', 'badge' => collect([
+            count($missingDocuments) > 0 ? count($missingDocuments).' por subir' : null,
+            $validationQueue['pending']->isNotEmpty() ? $validationQueue['pending']->count().' por validar' : null,
+            $validationQueue['observed']->isNotEmpty() ? $validationQueue['observed']->count().' observado(s)' : null,
+        ])->filter()->join(' · ') ?: null],
+    ];
+    if ($canSeeFinance) {
+        $tabs['finanzas'] = ['label' => 'Finanzas', 'icon' => 'finance', 'badge' => null];
+    }
+
+    // Datos de la pestana Documentos
     $documentCategoryOptions = collect();
     $documentTypeOptions = collect();
-    $documentBlueprints = collect();
-    $pendingDocuments = collect();
-    $documentCompletion = 0;
-    $documentCompletionDone = 0;
-
-    if ($initialTab === 'datos') {
-        $responsibleAssignments = $shipment->userAssignments->where('assignment_type', \App\Models\ShipmentUserAssignment::TYPE_RESPONSABLE)->values();
-        $trackingAssignments = $shipment->userAssignments->where('assignment_type', \App\Models\ShipmentUserAssignment::TYPE_SEGUIMIENTO)->values();
-    }
-
-    if ($initialTab === 'tracking' && $canOperate) {
-        $trackingStateOptions = collect($trackingStates)
-            ->map(fn ($state) => ['value' => $state, 'label' => $state]);
-    }
-
     if ($initialTab === 'documentos') {
-        $documentCategoryOptions = collect($documentCategories)
-            ->map(fn ($category) => ['value' => $category, 'label' => ucfirst($category)]);
-        $documentTypeOptions = collect($documentTypeSuggestions)
-            ->flatten()
-            ->unique()
-            ->values()
-            ->map(fn ($item) => ['value' => $item, 'label' => $item]);
-        $documentBlueprints = collect($shipment->documentChecklist())->values();
-        $pendingDocuments = $documentBlueprints
-            ->flatMap(fn (array $blueprint) => collect($blueprint['missing_items'])->map(fn (array $item) => [
-                'category' => $blueprint['key'],
-                'category_label' => $blueprint['label'],
-                'document' => $item['label'],
-                'hint' => $item['hint'],
-                'priority' => $item['priority'],
-                'priority_label' => $item['priority_label'],
-                'tone' => $blueprint['badge'],
-            ]))
-            ->sortBy(fn (array $item) => $item['priority'] === \App\Models\Shipment::CHECKLIST_PRIORITY_REQUIRED ? 0 : 1)
-            ->values();
-        $documentCompletion = $documentBlueprints->filter(fn (array $blueprint) => collect($blueprint['required_items'])->isNotEmpty())->count();
-        $documentCompletionDone = $documentBlueprints
-            ->filter(fn (array $blueprint) => collect($blueprint['required_items'])->isNotEmpty() && $blueprint['required_completion'])
-            ->count();
+        $documentCategoryOptions = collect($documentCategories)->map(fn ($category) => ['value' => $category, 'label' => ucfirst($category)]);
+        $documentTypeOptions = collect($documentTypeSuggestions)->flatten()->unique()->values()->map(fn ($item) => ['value' => $item, 'label' => $item]);
     }
 @endphp
 
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-slate-900">Detalle de embarque {{ $shipment->nro_orden_trabajo }}</h1>
+        <p class="hidden text-xs text-slate-500 sm:block">
+            <a href="{{ route('embarques.index') }}" class="hover:underline">Embarques</a> / {{ $shipment->nro_orden_trabajo }}
+        </p>
+        <h1>{{ $shipment->nro_orden_trabajo }} · {{ $shipment->routing_order }}</h1>
     </x-slot>
 
-    @if ($errors->any())
-        <div class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            Revisa los datos del formulario antes de continuar.
-        </div>
-    @endif
+    <x-slot name="actions">
+        <a href="{{ route('embarques.estado-pdf', $shipment) }}" class="fx-btn-secondary hidden md:inline-flex" title="Para enviar al cliente: sin costos ni datos internos">PDF de estado</a>
+        @if ($canEditShipment)
+            <a href="{{ route('embarques.edit', $shipment) }}" class="fx-btn-secondary">Editar</a>
+        @endif
+        @if ($canTrack && ! $isFinished)
+            <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}#registrar-hito" class="fx-btn-primary hidden sm:inline-flex">Registrar hito</a>
+        @elseif ($canCommunicate)
+            <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}#nota-cliente" class="fx-btn-primary hidden sm:inline-flex">Nota al cliente</a>
+        @endif
+        @if ($canCommunicate)
+            <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}#whatsapp" class="fx-btn-secondary" title="Mensaje al cliente por WhatsApp, sin costo">WhatsApp</a>
+        @endif
+    </x-slot>
 
     <div
-        x-data="{
-            showLogbook: false,
-            showSummary: false,
-            showDocumentModal: {{ $documentFormHasErrors ? 'true' : 'false' }},
-            showDocumentToast: {{ $documentToastMessage ? 'true' : 'false' }}
-        }"
-        x-init="if (showDocumentToast) { setTimeout(() => showDocumentToast = false, 2800) }"
-        class="grid gap-6 2xl:grid-cols-[1.35fr_0.65fr]"
+        x-data="{ showDocumentModal: {{ $documentFormHasErrors || ($initialTab === 'documentos' && request()->boolean('subir')) ? 'true' : 'false' }} }"
+        class="space-y-4"
     >
-        <div class="space-y-6">
-            <section class="overflow-hidden rounded-[28px] bg-gradient-to-r from-slate-900 via-sky-900 to-cyan-700 px-6 py-7 text-white shadow-lg">
-                <div class="flex min-h-[180px] flex-col justify-center gap-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="space-y-4">
-                        <div>
-                            <h2 class="text-3xl font-semibold">Embarque {{ $shipment->nro_orden_trabajo }}</h2>
-                            <p class="mt-2 max-w-3xl text-sm text-cyan-50/90">
-                                Cliente: {{ $shipment->client->razon_social }} · BL {{ $shipment->bl }} · Routing Order {{ $shipment->routing_order }}
+        <p class="text-slate-600">
+            <span class="font-medium text-slate-900">{{ $shipment->client->razon_social }}</span>
+            · {{ $cargoLabel }} · {{ $route }}
+            @if ($shipment->bl) · BL {{ $shipment->bl }} @endif
+        </p>
+
+        {{-- Datos clave: cada uno aparece solo aqui --}}
+        <section class="fx-card grid grid-cols-2 gap-x-6 gap-y-4 p-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div class="col-span-2 sm:col-span-3 lg:col-span-2">
+                <p class="text-xs text-slate-500">Estado</p>
+                <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 font-semibold text-slate-900">
+                    <span class="fx-status-dot {{ \App\Support\ChartPalette::stage($shipment->estado_actual)['dot'] }}" title="{{ \App\Support\ChartPalette::stage($shipment->estado_actual)['label'] }}"></span>
+                    {{ $shipment->estado_actual }}
+                    @unless ($isFinished)
+                        <span class="font-normal text-slate-500">· paso {{ $currentStateIndex + 1 }} de {{ $stateCount }}</span>
+                    @endunless
+                </p>
+                <div class="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-200">
+                    <div class="h-full rounded-full bg-accent-600" style="width: {{ round(($currentStateIndex + 1) / $stateCount * 100) }}%"></div>
+                </div>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500">ETD</p>
+                <p class="mt-0.5 tabular-nums text-slate-900">{{ $shipment->fecha_etd?->format('d/m/Y') ?? '—' }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500">ETA</p>
+                <p @class(['mt-0.5 tabular-nums', 'font-semibold text-rose-700' => $isDelayed, 'text-slate-900' => ! $isDelayed])>
+                    {{ $shipment->fecha_eta?->format('d/m/Y') ?? '—' }}
+                </p>
+                @if ($etaDiffers && $user->isInternal())
+                    <p class="text-xs text-amber-700">El cliente ve {{ $shipment->fecha_eta_cliente?->format('d/m/Y') ?? 'sin fecha' }}</p>
+                @endif
+            </div>
+            <div>
+                <p class="text-xs text-slate-500">Customer · Operador</p>
+                <p class="mt-0.5 truncate text-slate-900">{{ $shipment->customerService?->name ?? '—' }} · {{ $shipment->operador?->name ?? 'sin asignar' }}</p>
+            </div>
+            @if ($canViewTrackingCode)
+                <div x-data="{ copied: false }">
+                    <p class="text-xs text-slate-500">Código para el cliente</p>
+                    <div class="mt-0.5 flex flex-wrap items-center gap-2">
+                        <span class="rounded bg-yellow-300 px-2 py-0.5 font-mono font-semibold tracking-wide text-slate-900 ring-1 ring-yellow-400">{{ $shipment->tracking_code }}</span>
+                        <button type="button" class="fx-btn-link-primary text-xs"
+                                x-on:click="navigator.clipboard.writeText(@js($shipment->tracking_code)).then(() => { copied = true; setTimeout(() => copied = false, 2000) })"
+                                x-text="copied ? 'Copiado' : 'Copiar código'">Copiar código</button>
+                    </div>
+                </div>
+            @endif
+        </section>
+
+        {{-- Requiere atencion: alertas de plazo y tareas, solo si hay algo --}}
+        @if ($attention !== [] || $visibleAlerts->isNotEmpty())
+            @php $hasDanger = collect($attention)->contains('level', 'danger') || $visibleAlerts->contains('level', 'danger'); @endphp
+            <section @class([
+                'fx-card border-l-4 p-4',
+                'border-l-rose-600' => $hasDanger,
+                'border-l-amber-500' => ! $hasDanger,
+            ])>
+                <h2 class="fx-section-title">Requiere atención</h2>
+                <ul class="mt-2 divide-y divide-slate-100">
+                    @foreach ($visibleAlerts as $alert)
+                        @include('alerts.row', ['alert' => $alert, 'compact' => true])
+                    @endforeach
+                    @foreach ($attention as $item)
+                        <li class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <p class="flex items-start gap-2 text-slate-700">
+                                <span class="flex h-5 w-4 shrink-0 items-center justify-center">
+                                    <span @class(['fx-status-dot', 'bg-rose-600' => $item['level'] === 'danger', 'bg-amber-500' => $item['level'] !== 'danger'])></span>
+                                </span>
+                                {{ $item['text'] }}
                             </p>
-                        </div>
-
-                        <div class="flex flex-wrap gap-3 text-sm">
-                            <span class="rounded-full bg-white/15 px-4 py-2 font-semibold text-white">Estado actual: {{ $shipment->estado_actual }}</span>
-                            <span class="rounded-full bg-emerald-400/15 px-4 py-2 font-semibold text-emerald-100">ETA {{ optional($shipment->fecha_eta)->format('d/m/Y') ?: 'sin fecha' }}</span>
-                            <span class="rounded-full bg-white/15 px-4 py-2 font-semibold text-white">{{ $shipment->tipo_carga }} · {{ $shipment->origen }} / {{ $shipment->puerto_descarga }}</span>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col items-start justify-center gap-3 lg:ml-auto lg:items-end">
-                        <div class="flex w-full flex-wrap items-start justify-end gap-2 self-end lg:w-auto">
-                            @if ($canOperate)
-                                <a href="{{ route('embarques.edit', $shipment) }}" class="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-50">Editar embarque</a>
+                            @if ($item['action_url'])
+                                <a href="{{ $item['action_url'] }}" class="fx-btn-link-primary shrink-0 pl-4 sm:pl-0">{{ $item['action_label'] }}</a>
                             @endif
-                            <a href="{{ route('embarques.index') }}" class="rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">Volver</a>
-                        </div>
-                        @if ($canViewTrackingCode)
-                            <div class="w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-left lg:w-[278px]">
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/80">Código de seguimiento público</p>
-                                <div class="mt-2 flex flex-wrap items-center gap-3">
-                                    <p id="tracking-code-value" class="font-mono text-lg font-semibold text-white">{{ $shipment->tracking_code }}</p>
-                                    <button
-                                        type="button"
-                                        id="copy-tracking-code"
-                                        class="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-50"
-                                    >
-                                        Copiar código
-                                    </button>
-                                </div>
-                                <p id="copy-tracking-feedback" class="mt-2 text-xs text-cyan-100/80"></p>
-                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
+        {{-- Pestanas --}}
+        <nav class="-mx-4 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0" aria-label="Secciones del embarque">
+            <div class="fx-tabs">
+                @foreach ($tabs as $key => $tab)
+                    <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => $key]) }}"
+                       @class(['fx-tab', 'fx-tab-active' => $initialTab === $key])
+                       @if ($initialTab === $key) aria-current="page" @endif>
+                        <x-nav-icon :name="$tab['icon']" class="fx-tab-icon" />
+                        {{ $tab['label'] }}
+                        @if ($tab['badge'])
+                            <span class="text-xs font-medium text-amber-700">{{ $tab['badge'] }}</span>
                         @endif
-                    </div>
-                </div>
-            </section>
+                    </a>
+                @endforeach
+            </div>
+        </nav>
 
-            <section class="fx-card overflow-hidden">
-                <div class="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                    <div class="inline-flex flex-wrap gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200">
-                        <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'datos']) }}" class="relative transition-all duration-200 ease-out {{ $initialTab === 'datos' ? $activeTabClasses : $inactiveTabClasses }}">
-                            <span class="inline-flex items-center gap-2">
-                                <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M4 6h16"></path>
-                                    <path d="M4 12h16"></path>
-                                    <path d="M4 18h10"></path>
-                                </svg>
-                                <span>Datos</span>
-                            </span>
-                            @if ($initialTab === 'datos')
-                                <span class="absolute inset-x-4 -bottom-1 h-1 rounded-full bg-cyan-300"></span>
-                            @endif
-                        </a>
-                        <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}" class="relative transition-all duration-200 ease-out {{ $initialTab === 'tracking' ? $activeTabClasses : $inactiveTabClasses }}">
-                            <span class="inline-flex items-center gap-2">
-                                <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M5 12h14"></path>
-                                    <path d="m12 5 7 7-7 7"></path>
-                                </svg>
-                                <span>Estado de embarque</span>
-                            </span>
-                            @if ($initialTab === 'tracking')
-                                <span class="absolute inset-x-4 -bottom-1 h-1 rounded-full bg-cyan-300"></span>
-                            @endif
-                        </a>
-                        <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'documentos']) }}" class="relative transition-all duration-200 ease-out {{ $initialTab === 'documentos' ? $activeTabClasses : $inactiveTabClasses }}">
-                            <span class="inline-flex items-center gap-2">
-                                <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M7 3h7l5 5v13H7z"></path>
-                                    <path d="M14 3v5h5"></path>
-                                    <path d="M10 13h6"></path>
-                                    <path d="M10 17h4"></path>
-                                </svg>
-                                <span>Documentos</span>
-                            </span>
-                            @if ($initialTab === 'documentos')
-                                <span class="absolute inset-x-4 -bottom-1 h-1 rounded-full bg-cyan-300"></span>
-                            @endif
-                        </a>
-                    </div>
-                </div>
-
-                <div class="p-6">
-                    @if ($initialTab === 'datos')
-                        @include('shipments.tabs.datos')
-                    @elseif ($initialTab === 'tracking')
-                        @include('shipments.tabs.tracking')
-                    @elseif ($initialTab === 'documentos')
-                        @include('shipments.tabs.documentos')
-                    @endif
-                </div>
-            </section>
+        <div>
+            @if ($initialTab === 'datos')
+                @include('shipments.tabs.datos')
+            @elseif ($initialTab === 'tracking')
+                @include('shipments.tabs.tracking')
+            @elseif ($initialTab === 'documentos')
+                @include('shipments.tabs.documentos')
+            @elseif ($initialTab === 'finanzas' && $canSeeFinance)
+                @include('shipments.tabs.finanzas')
+            @endif
         </div>
 
-        <aside class="space-y-6">
-            <section class="fx-card fx-card-body">
-                <div class="flex items-center justify-between gap-4">
-                    <h2 class="text-lg font-semibold text-slate-900">Bitácora cronológica</h2>
-                    <button
-                        type="button"
-                        x-on:click="showLogbook = !showLogbook"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-cyan-700"
-                        :aria-expanded="showLogbook.toString()"
-                        aria-label="Mostrar u ocultar bitácora cronológica"
-                    >
-                        <span x-text="showLogbook ? '−' : '+'"></span>
-                    </button>
-                </div>
-                <div x-show="showLogbook" x-cloak x-transition.opacity.duration.200ms class="mt-4 space-y-3">
-                    @forelse ($visibleLogbookEvents as $event)
-                        <div class="rounded-2xl border border-slate-200 px-4 py-4">
-                            <div class="flex flex-col gap-2">
-                                <div>
-                                    <p class="font-semibold text-slate-900">{{ $event->estado }}</p>
-                                    <p class="mt-1 text-sm text-slate-500">{{ $event->descripcion ?: 'Sin descripción adicional.' }}</p>
-                                </div>
-                                <div class="text-sm text-slate-500">
-                                    {{ $event->fecha->format('d/m/Y H:i') }} · {{ $event->user->name }}
-                                </div>
-                            </div>
+        @if ($canManageDocuments && $initialTab === 'documentos')
+            <template x-teleport="body">
+                <div x-show="showDocumentModal" x-cloak x-on:keydown.escape.window="showDocumentModal = false"
+                     class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+                    <section class="w-full max-w-lg rounded-t-md bg-white shadow-lg sm:rounded-md" x-on:click.outside="showDocumentModal = false"
+                             role="dialog" aria-modal="true" aria-labelledby="document-modal-title">
+                        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+                            <h3 id="document-modal-title" class="fx-section-title">Subir documento</h3>
+                            <button type="button" x-on:click="showDocumentModal = false" class="rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Cerrar">
+                                <x-nav-icon name="close" class="h-5 w-5" />
+                            </button>
                         </div>
-                    @empty
-                        <p class="text-sm text-slate-500">No hay eventos registrados todavía.</p>
-                    @endforelse
-                    @if ($hiddenLogbookCount > 0)
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
-                            <p class="text-sm font-medium text-slate-700">Hay {{ $hiddenLogbookCount }} movimiento(s) más en la bitácora.</p>
-                            <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}" class="mt-2 inline-flex text-sm font-semibold text-cyan-700 transition hover:text-cyan-800">
-                                Ver seguimiento completo
-                            </a>
-                        </div>
-                    @endif
-                </div>
-            </section>
-
-            <section class="fx-card fx-card-body">
-                <div class="flex items-center justify-between gap-4">
-                    <h2 class="text-lg font-semibold text-slate-900">Resumen operativo</h2>
-                    <button
-                        type="button"
-                        x-on:click="showSummary = !showSummary"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-cyan-700"
-                        :aria-expanded="showSummary.toString()"
-                        aria-label="Mostrar u ocultar resumen operativo"
-                    >
-                        <span x-text="showSummary ? '−' : '+'"></span>
-                    </button>
-                </div>
-                <div x-show="showSummary" x-cloak x-transition.opacity.duration.200ms class="mt-4 space-y-3">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Estado actual</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ $shipment->estado_actual }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Endoso</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ ucfirst(str_replace('_', ' ', $shipment->estado_endoso)) }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Último movimiento</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ $lastEventAt }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p class="text-sm text-slate-500">Documentos</p>
-                        <p class="mt-1 font-semibold text-slate-900">{{ $documentCount }} archivos</p>
-                    </div>
-                </div>
-            </section>
-
-            @if ($endorsementDocumentsPreview->isNotEmpty())
-                <section class="fx-card fx-card-body">
-                    <h2 class="text-lg font-semibold text-slate-900">Endoso</h2>
-                    <div class="mt-4 space-y-3">
-                        @foreach ($endorsementDocumentsPreview as $document)
-                            <div class="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
-                                <p class="font-semibold text-slate-900">{{ $document->tipo_documento }}</p>
-                                <p class="mt-1 text-sm text-slate-500">{{ $document->nombre_original }}</p>
-                            </div>
-                        @endforeach
-                    </div>
-                </section>
-            @endif
-        </aside>
-
-        @if ($canOperate && $initialTab === 'documentos')
-            <div
-                x-init="$nextTick(() => document.body.appendChild($el))"
-                x-show="showDocumentModal"
-                x-cloak
-                x-transition.opacity
-                class="fixed inset-0 z-[999] flex items-center justify-center p-6"
-                style="position: fixed; inset: 0;"
-            >
-                <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" x-on:click="showDocumentModal = false"></div>
-                <section
-                    class="relative z-10 rounded-[28px] bg-white shadow-2xl"
-                    style="width:min(42rem, calc(100vw - 3rem));"
-                >
-                    <div class="flex items-center justify-between border-b border-slate-200 px-8 py-6">
-                        <div>
-                            <h3 class="text-xl font-semibold text-slate-900">Agregar documento</h3>
-                        </div>
-                        <button type="button" x-on:click="showDocumentModal = false" class="text-2xl leading-none text-slate-400 transition hover:text-slate-700">×</button>
-                    </div>
-                    <form method="POST" action="{{ route('embarques.documentos.store', $shipment) }}" enctype="multipart/form-data" class="space-y-6 px-8 py-7" data-disable-native-autocomplete="true">
-                        @csrf
-                        <div>
+                        <form method="POST" action="{{ route('embarques.documentos.store', $shipment) }}" enctype="multipart/form-data" class="space-y-4 p-5" data-disable-native-autocomplete="true">
+                            @csrf
                             <x-form-combobox
                                 id="categoria"
                                 name="categoria"
                                 label="Categoría"
                                 :options="$documentCategoryOptions"
-                                :value="old('categoria', $pendingDocuments->first()['category'] ?? ($documentCategories[0] ?? ''))"
+                                :value="old('categoria', request('categoria', $documentCategories[0] ?? ''))"
                                 placeholder="Seleccionar categoría"
                                 required
                             />
-                        </div>
-                        <div>
                             <x-form-autocomplete
                                 id="tipo_documento"
                                 name="tipo_documento"
                                 label="Tipo de documento"
                                 :options="$documentTypeOptions"
-                                :value="old('tipo_documento')"
+                                :value="old('tipo_documento', request('tipo'))"
                                 placeholder="Escribe o busca el tipo"
                                 search-placeholder="Buscar tipo de documento..."
                                 empty-text="No hay tipos sugeridos que coincidan."
                                 required
                             />
-                        </div>
-                        <div>
-                            <label class="fx-label" for="archivo">Archivo</label>
-                            <input class="fx-input" id="archivo" name="archivo" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
-                            <p class="mt-2 text-xs text-slate-500">PDF, JPG o PNG · hasta 5 MB por archivo.</p>
-                        </div>
-                        <div class="flex flex-col-reverse gap-3 border-t border-slate-100 pt-2 sm:flex-row sm:justify-end">
-                            <button type="button" x-on:click="showDocumentModal = false" class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Cancelar</button>
-                            <button class="inline-flex items-center justify-center rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-700" type="submit">Guardar documento</button>
-                        </div>
-                    </form>
-                </section>
-            </div>
-        @endif
-
-        @if ($initialTab === 'documentos' && $documentToastMessage)
-            <div
-                x-show="showDocumentToast"
-                x-cloak
-                x-transition.opacity.duration.250ms
-                class="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg"
-            >
-                <p class="text-sm font-semibold text-emerald-700">{{ $documentToastMessage }}</p>
-            </div>
+                            <div>
+                                <label class="fx-label" for="archivo">Archivo (PDF, JPG o PNG, máx. 5 MB)</label>
+                                <input class="fx-input" id="archivo" name="archivo" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
+                            </div>
+                            <div class="flex justify-end gap-2 pt-2">
+                                <button type="button" x-on:click="showDocumentModal = false" class="fx-btn-secondary">Cancelar</button>
+                                <button class="fx-btn-primary" type="submit">Subir</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </template>
         @endif
     </div>
-
-    @if ($canViewTrackingCode)
-        <script>
-            document.addEventListener('DOMContentLoaded', () => {
-                const copyButton = document.getElementById('copy-tracking-code');
-                const trackingValue = document.getElementById('tracking-code-value');
-                const feedback = document.getElementById('copy-tracking-feedback');
-
-                if (!copyButton || !trackingValue || !feedback) {
-                    return;
-                }
-
-                copyButton.addEventListener('click', async () => {
-                    try {
-                        await navigator.clipboard.writeText(trackingValue.textContent.trim());
-                        feedback.textContent = 'Código copiado al portapapeles.';
-                        feedback.className = 'mt-2 text-xs text-emerald-600';
-                    } catch (error) {
-                        feedback.textContent = 'No se pudo copiar automáticamente.';
-                        feedback.className = 'mt-2 text-xs text-rose-600';
-                    }
-                });
-            });
-        </script>
-    @endif
 </x-app-layout>
-
-
-
