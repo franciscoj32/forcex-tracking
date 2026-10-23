@@ -129,6 +129,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/configuracion', [AppSettingController::class, 'edit'])->middleware('role:admin')->name('configuracion.edit');
     Route::put('/configuracion', [AppSettingController::class, 'update'])->middleware('role:admin')->name('configuracion.update');
 
+    // Modulo opcional: apagado en Configuracion, sus rutas no existen.
+    Route::middleware('module:productividad')->group(base_path('routes/productivity.php'));
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

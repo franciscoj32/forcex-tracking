@@ -26,6 +26,14 @@ class User extends Authenticatable
     public const ROLE_OPERACIONES = 'operaciones';
     public const ROLE_CLIENTE = 'cliente';
 
+    /**
+     * Desarrollo: cuenta tecnica oculta, por encima del Administrador / Gerente.
+     * Tiene todos sus permisos y ademas maneja la marca y los modulos.
+     * No esta en ROLES ni en INTERNAL_ROLES: no se puede asignar desde el
+     * formulario y no aparece en listas, selectores ni correos del negocio.
+     */
+    public const ROLE_DEVELOPER = 'desarrollo';
+
     public const ESTADO_ACTIVO = 'activo';
     public const ESTADO_INACTIVO = 'inactivo';
 
@@ -63,6 +71,7 @@ class User extends Authenticatable
         'acceso_portal',
         'estado',
         'email_verified_at',
+        'fecha_nacimiento',
     ];
 
     protected $hidden = [
@@ -76,12 +85,60 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'acceso_portal' => 'boolean',
+            'fecha_nacimiento' => 'date',
         ];
+    }
+
+    /**
+     * ¿Hoy es su cumpleanos? Quien nacio un 29 de febrero lo celebra el 28
+     * en los anos que no son bisiestos.
+     */
+    public function isBirthdayOn(?\DateTimeInterface $day = null): bool
+    {
+        if (! $this->fecha_nacimiento) {
+            return false;
+        }
+
+        $day = \Illuminate\Support\Carbon::instance($day ?? today());
+        $month = (int) $this->fecha_nacimiento->month;
+        $date = (int) $this->fecha_nacimiento->day;
+
+        if ($month === 2 && $date === 29 && ! $day->isLeapYear()) {
+            $date = 28;
+        }
+
+        return $day->month === $month && $day->day === $date;
+    }
+
+    /** "15 de marzo": sin el ano, para mostrarlo al equipo. */
+    public function birthdayLabel(): ?string
+    {
+        return $this->fecha_nacimiento?->locale('es')->translatedFormat('j \d\e F');
+    }
+
+    /** Primer nombre, para saludos. */
+    public function firstName(): string
+    {
+        return \Illuminate\Support\Str::before(trim($this->name), ' ') ?: $this->name;
+    }
+
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'asignado_a_id');
     }
 
     public static function roleLabel(?string $role): string
     {
-        return self::ROLE_LABELS[$role] ?? ucfirst((string) $role);
+        return self::ROLE_LABELS[$role] ?? ($role === self::ROLE_DEVELOPER ? 'Desarrollo' : ucfirst((string) $role));
+    }
+
+    /**
+     * Rol con el que se aplican los permisos por rol: Desarrollo trabaja con
+     * los del Administrador (tablas de campos editables, tareas del Inicio).
+     */
+    public function permissionRole(): string
+    {
+        return $this->isDeveloper() ? self::ROLE_ADMIN : (string) $this->role;
     }
 
     public function getRoleLabelAttribute(): string
@@ -139,9 +196,16 @@ class User extends Authenticatable
         return $this->hasMany(Shipment::class, 'operador_id');
     }
 
+    /** Administrador / Gerente. Desarrollo tambien cuenta como Administrador. */
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->role === self::ROLE_ADMIN || $this->isDeveloper();
+    }
+
+    /** Cuenta oculta de Desarrollo: marca, modulos y todo lo del Administrador. */
+    public function isDeveloper(): bool
+    {
+        return $this->role === self::ROLE_DEVELOPER;
     }
 
     public function isComercial(): bool
@@ -161,12 +225,16 @@ class User extends Authenticatable
 
     public function isInternal(): bool
     {
-        return in_array($this->role, self::INTERNAL_ROLES, true);
+        return in_array($this->role, self::INTERNAL_ROLES, true) || $this->isDeveloper();
     }
 
+    /** Desarrollo cumple cualquier permiso que tenga el Administrador. */
     public function hasRole(string|array $roles): bool
     {
-        return in_array($this->role, (array) $roles, true);
+        $roles = (array) $roles;
+
+        return in_array($this->role, $roles, true)
+            || ($this->isDeveloper() && in_array(self::ROLE_ADMIN, $roles, true));
     }
 
     public function isActive(): bool

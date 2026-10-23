@@ -70,6 +70,14 @@
             placeholder="Seleccionar estado"
         />
     </div>
+    @can('use-productivity')
+        <div>
+            <label class="fx-label" for="fecha_nacimiento">Cumpleaños <span class="font-normal text-slate-400">(opcional)</span></label>
+            <input class="fx-input" id="fecha_nacimiento" name="fecha_nacimiento" type="date" max="{{ today()->subDay()->toDateString() }}"
+                value="{{ old('fecha_nacimiento', isset($user) ? $user->fecha_nacimiento?->toDateString() : '') }}">
+            <p class="mt-1 text-xs text-slate-500">El equipo solo ve el día y el mes. Ese día recibe un saludo y aparece en la pizarra.</p>
+        </div>
+    @endcan
 </div>
 
 <div class="mt-4 flex gap-2">

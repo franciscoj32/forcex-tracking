@@ -43,7 +43,7 @@ class ActionInbox
      */
     public function shipmentsFor(User $user): Collection
     {
-        $keys = self::SHIPMENT_KEYS[$user->role] ?? [];
+        $keys = self::SHIPMENT_KEYS[$user->permissionRole()] ?? [];
         $needsDocuments = array_intersect($keys, ['documentos', 'documentos-validar', 'documento-observado']) !== [];
 
         return Shipment::query()
@@ -78,7 +78,7 @@ class ActionInbox
 
     private function shipmentItems(User $user, ?Collection $shipments): Collection
     {
-        $keys = self::SHIPMENT_KEYS[$user->role] ?? [];
+        $keys = self::SHIPMENT_KEYS[$user->permissionRole()] ?? [];
 
         if ($keys === []) {
             return collect();

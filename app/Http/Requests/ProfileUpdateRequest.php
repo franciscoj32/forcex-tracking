@@ -34,6 +34,8 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            // Cumpleanos (modulo de Productividad). Si no se envia, no cambia.
+            'fecha_nacimiento' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
         ];
     }
 }

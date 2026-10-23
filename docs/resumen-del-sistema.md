@@ -14,7 +14,8 @@ Está pensada como piloto de un producto que después se venderá a varias empre
 
 | Rol | Qué hace en el sistema |
 |---|---|
-| **Administrador / Gerente** | Ve todo. Aprueba clientes, puede forzar el crédito de una RO, ajusta el tipo de cambio, gestiona usuarios, conceptos de tarifa y configuración. Ve el panel del mes, el ranking de comerciales y las alertas escaladas. |
+| **Desarrollo** (oculto) | Cuenta técnica por encima del Gerente. Tiene todos sus permisos y además cambia la marca (nombre, logo, sigla, colores) y activa los módulos opcionales. No aparece en la lista de usuarios, en los selectores ni en el ranking, no recibe los correos del negocio y nadie más puede abrirla, editarla ni borrarla. Rol interno `desarrollo`. |
+| **Administrador / Gerente** | Ve todo. Aprueba clientes, puede forzar el crédito de una RO, gestiona usuarios y conceptos de tarifa. En **Configuración** solo ve el tipo de cambio, los datos de la empresa para documentos, las cotizaciones y las alertas. Ve el panel del mes, el ranking de comerciales y las alertas escaladas, y recibe los correos para el Administrador. |
 | **Comercial** | Registra clientes (quedan pendientes de aprobación) y crea las RO con sus tarifas de venta. Ve sus ventas, su margen y su puesto en el ranking. Solo puede corregir sus RO mientras están en "Creación Routing Order". |
 | **Customer Service** | Es el único punto de contacto con el cliente. Asigna el operador, valida los cambios de ETD/ETA antes de que el cliente los vea, valida documentos (aprobar u observar) y escribe notas al cliente. |
 | **Operaciones** | Es dueño de los datos técnicos: BL, naviera, fechas, cut-off, contenedores, tarja, almacén, días libres y ubicación. Registra hitos, sube documentos, registra provisiones (costos de proveedores) y facturas. |
@@ -165,6 +166,20 @@ Las alertas son plazos que el sistema detecta solo. Las tareas son lo que depend
 
 ---
 
+## 5c. Módulo opcional: Productividad y Cultura
+
+- **Interruptor:** Configuración → **Módulos** (solo la cuenta de Desarrollo). Apagado, no aparece en ninguna pantalla, sus rutas responden 404 y no hace consultas. Las tablas se crean siempre con las migraciones.
+- **Tareas** (menú Equipo → Tareas): cada tarea tiene un día y, si se quiere, una hora límite. Sin hora queda como **post-it del día**. Puede ser genérica o tener un **acceso directo a una RO** (se escribe la RO u OT, o se crea con el botón "Tarea" de la ficha de la RO). Se crea para uno mismo o para un compañero, que recibe un aviso. Tres formatos: **Lista** (atrasadas, hoy, mañana, próximos 7 días, más adelante y hechas de la semana), **Semana** y **Mes**. Filtros: Mías, Asignadas por mí y, para la Gerencia, Todo el equipo.
+- **Quién ve qué:** cada uno ve las tareas que creó y las que le asignaron; la Gerencia ve las de todo el equipo. La marca como hecha quien la tiene o quien la creó; la edita o borra quien la creó (y la Gerencia).
+- **Post-it flotante:** en todas las pantallas, con las tareas de hoy y las atrasadas. Se arrastra a cualquier lugar, se minimiza a un botón y recuerda su posición en ese equipo. Permite agregar una nota rápida (Enter) y marcarla como hecha. En el celular empieza minimizado.
+- **Ficha de la RO:** muestra sus tareas pendientes.
+- **Pizarra de oficina** (menú Equipo → Pizarra y bloque en el Inicio): la Gerencia publica anuncios ("Reunión a las 4 PM", "Feriado el viernes"), que duran 7 días por defecto y se pueden fijar arriba. Reemplaza los correos masivos internos. Muestra también los cumpleaños del mes (solo día y mes).
+- **Cumpleaños:** campo opcional en Usuarios y en "Mi perfil". Ese día la persona ve un saludo con confeti (una vez por día) y la pizarra publica "¡Hoy es el cumpleaños de…!" con aviso al equipo. Quien nació un 29 de febrero lo celebra el 28 en años no bisiestos.
+- **Avisos in-app (campanita):** sin correos. Llegan cuando te asignan una tarea, cuando una tarea con hora vence en 2 horas (`FORCEX_TASK_REMINDER_HOURS`) y cuando hay un anuncio o un cumpleaños en la pizarra. Los nuevos aparecen como un aviso pequeño en la esquina superior derecha que se va solo (máximo 3 a la vez). La campanita se actualiza cada 2 minutos mientras la pestaña está a la vista. Usa la tabla `notifications` nativa de Laravel; los correos siguen en `notification_logs`.
+- **Tareas programadas:** `forcex:recordatorios-tareas` cada 15 minutos, `forcex:cumpleanos` a las 00:05 y limpieza de avisos leídos de más de 60 días a las 3:10. Si el cron no corre, la primera página del día publica los cumpleaños igual.
+
+---
+
 ## 6. Finanzas
 
 - **Tarifas de venta por RO:** concepto, monto y moneda (USD o PEN).
@@ -196,6 +211,7 @@ En el hosting basta **una** tarea cada minuto:
 
 Con eso el sistema:
 - procesa la cola de correos cada minuto;
+- si el módulo de Productividad está encendido: avisa las tareas por vencer cada 15 minutos y publica los cumpleaños a las 00:05;
 - envía el resumen diario de alertas a las 7:00 (`FORCEX_DAILY_ALERTS_AT`);
 - limpia las acciones de alertas de más de 90 días a las 3:00.
 
@@ -207,10 +223,12 @@ Los carga `php artisan db:seed` (o `migrate:fresh --seed` en una base vacía).
 
 | Usuario | Rol | Contraseña |
 |---|---|---|
-| admin | Administrador | cambiar123 |
+| admin | Desarrollo (oculto) | cambiar123 |
 | juan_comercial, ana_comercial | Comercial | Demo123456 |
 | maria_customer, diego_customer | Customer Service | Demo123456 |
 | carla_operaciones, luis_operaciones | Operaciones | Demo123456 |
+
+La cuenta de la Gerente no es de prueba: se crea con `php artisan forcex:usuarios-base --gerente-usuario=... --gerente-nombre="..." --gerente-correo=...`, que además convierte `admin` en Desarrollo. Muestra una contraseña temporal una sola vez y se puede repetir sin duplicar nada.
 
 Incluyen 15 RO (FX-OT-250001 a 250015), documentos por validar y observados, cambios de fecha pendientes, provisiones, facturas, una alerta de cada tipo y nivel, y 2 cotizaciones de Juan Comercial (una enviada a Andean Retail y un borrador para un prospecto).
 
@@ -227,6 +245,7 @@ Incluyen 15 RO (FX-OT-250001 a 250015), documentos por validar y observados, cam
 | Pre-alerta de llegada | `app/Services/PreAlertService.php`, `app/Http/Controllers/ShipmentPreAlertController.php`, `app/Models/ShipmentPreAlert.php`, `resources/views/shipments/pre-alert.blade.php` |
 | Tareas del Inicio | `app/Services/ActionInbox.php`, `app/Support/ShipmentAttention.php` |
 | Correos | `app/Services/ShipmentNotifier.php`, `app/Support/MailSubject.php`, `app/Jobs/SendTrackingMail.php`, `resources/views/vendor/mail/` |
+| Productividad (opcional) | `routes/productivity.php`, `app/Http/Controllers/Productivity/`, `app/Services/Productivity/`, `app/Models/Task.php`, `app/Models/Announcement.php`, `app/Notifications/`, `app/Http/Middleware/EnsureModuleEnabled.php`, `resources/views/productivity/` |
 | Cotizaciones | `app/Models/Quotation.php`, `app/Services/QuotationService.php`, `app/Http/Controllers/QuotationController.php`, `app/Policies/QuotationPolicy.php`, `resources/views/quotations/`, `resources/views/pdf/quotation.blade.php` |
 | WhatsApp al cliente | `app/Support/WhatsApp.php`, `app/Http/Controllers/ShipmentWhatsAppController.php`, `resources/views/shipments/tabs/tracking.blade.php` |
 | Cambios de ETD/ETA | `app/Services/ShipmentDateChangeService.php`, `app/Observers/ShipmentObserver.php` |

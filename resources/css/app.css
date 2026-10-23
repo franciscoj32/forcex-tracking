@@ -351,3 +351,43 @@
         @apply text-white;
     }
 }
+
+/* ---------- Modulo de Productividad: avisos, post-it y cumpleanos ---------- */
+@keyframes fx-toast-progress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+.fx-toast-progress {
+    transform-origin: left;
+    animation: fx-toast-progress var(--fx-toast-ms, 6000ms) linear forwards;
+}
+
+.fx-toast:hover .fx-toast-progress {
+    animation-play-state: paused;
+}
+
+@keyframes fx-bell-ring {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(14deg); }
+    40% { transform: rotate(-12deg); }
+    60% { transform: rotate(8deg); }
+    80% { transform: rotate(-4deg); }
+}
+
+.fx-bell-ring {
+    transform-origin: 50% 4px;
+    animation: fx-bell-ring 0.9s ease-in-out 1;
+}
+
+/* Post-it: papel con un brillo suave arriba */
+.fx-postit {
+    background-image: linear-gradient(180deg, rgb(254 249 195) 0%, rgb(254 243 199) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fx-toast-progress,
+    .fx-bell-ring {
+        animation: none;
+    }
+}

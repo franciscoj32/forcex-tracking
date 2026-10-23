@@ -90,6 +90,8 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
             'role' => ['required', Rule::in(User::ROLES)],
             'estado' => ['required', 'in:activo,inactivo'],
+            // Cumpleanos (modulo de Productividad). Si no se envia, no cambia.
+            'fecha_nacimiento' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
             'client_id' => [
                 Rule::requiredIf(fn () => $request->input('role') === User::ROLE_CLIENTE),
                 'nullable',
@@ -112,8 +114,13 @@ class UserController extends Controller
         return User::INTERNAL_ROLES;
     }
 
+    /**
+     * Los usuarios cliente y la cuenta de Desarrollo no se administran aqui.
+     * Desarrollo no aparece en la lista y no se puede abrir, editar ni borrar
+     * (su contrasena se cambia desde "Mi perfil").
+     */
     private function ensureManagedUser(User $user): void
     {
-        abort_if($user->role === User::ROLE_CLIENTE, 404);
+        abort_if($user->role === User::ROLE_CLIENTE || $user->isDeveloper(), 404);
     }
 }

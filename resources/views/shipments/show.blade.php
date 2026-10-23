@@ -90,6 +90,11 @@
         @if ($canCommunicate)
             <a href="{{ route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking']) }}#whatsapp" class="fx-btn-secondary" title="Mensaje al cliente por WhatsApp, sin costo">WhatsApp</a>
         @endif
+        @can('use-productivity')
+            <a href="{{ route('tareas.index', ['vista' => 'lista', 'nueva' => 1, 'ro' => $shipment->routing_order]) }}" class="fx-btn-secondary hidden sm:inline-flex" title="Crear una tarea con acceso directo a esta RO">
+                <x-nav-icon name="tasks" /> Tarea
+            </a>
+        @endcan
     </x-slot>
 
     <div
@@ -101,6 +106,29 @@
             · {{ $cargoLabel }} · {{ $route }}
             @if ($shipment->bl) · BL {{ $shipment->bl }} @endif
         </p>
+
+        {{-- Tareas pendientes de esta RO (modulo de Productividad) --}}
+        @can('use-productivity')
+            @php
+                $shipmentTasks = \App\Models\Task::query()->visibleTo($user)->pending()
+                    ->where('shipment_id', $shipment->id)->with('assignee:id,name')->agenda()->take(5)->get();
+            @endphp
+            @if ($shipmentTasks->isNotEmpty())
+                <section class="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm">
+                    <span class="flex items-center gap-1.5 font-medium text-amber-900"><x-nav-icon name="tasks" class="h-4 w-4" /> Tareas de esta RO</span>
+                    @foreach ($shipmentTasks as $shipmentTask)
+                        @php
+                            $taskFilter = (int) $shipmentTask->asignado_a_id === (int) $user->id ? 'mias'
+                                : ((int) $shipmentTask->creado_por_id === (int) $user->id ? 'asignadas' : 'equipo');
+                        @endphp
+                        <a href="{{ route('tareas.index', ['vista' => 'lista', 'tarea' => $shipmentTask->id, 'de' => $taskFilter]) }}"
+                            @class(['inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 hover:ring-amber-400', 'text-rose-700 ring-rose-200' => $shipmentTask->isOverdue(), 'text-slate-700 ring-amber-200' => ! $shipmentTask->isOverdue()])>
+                            {{ $shipmentTask->titulo }} · {{ $shipmentTask->whenLabel() }}{{ (int) $shipmentTask->asignado_a_id !== (int) $user->id ? ' · '.$shipmentTask->assignee?->firstName() : '' }}
+                        </a>
+                    @endforeach
+                </section>
+            @endif
+        @endcan
 
         {{-- Datos clave: cada uno aparece solo aqui --}}
         <section class="fx-card grid grid-cols-2 gap-x-6 gap-y-4 p-4 sm:grid-cols-3 lg:grid-cols-6">

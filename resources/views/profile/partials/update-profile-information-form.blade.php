@@ -28,6 +28,16 @@
             </div>
         </div>
 
+        @can('use-productivity')
+            <div class="sm:max-w-xs">
+                <label class="fx-label" for="fecha_nacimiento">Cumpleaños <span class="font-normal text-slate-400">(opcional)</span></label>
+                <input class="fx-input" id="fecha_nacimiento" name="fecha_nacimiento" type="date" max="{{ today()->subDay()->toDateString() }}"
+                    value="{{ old('fecha_nacimiento', $user->fecha_nacimiento?->toDateString()) }}">
+                <p class="mt-1 text-xs text-slate-500">El equipo solo verá el día y el mes, para saludarte.</p>
+                <x-input-error class="mt-1" :messages="$errors->get('fecha_nacimiento')" />
+            </div>
+        @endcan
+
         @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
             <p class="text-sm text-amber-800">
                 Tu correo no está verificado.

@@ -37,6 +37,11 @@ class DashboardController extends Controller
         [$alerts, $preAlerts] = $this->splitPreAlerts((new AlertBoard(new AlertDetector($limits), $limits))->for($user, $shipments), $user);
 
         return view('dashboard', [
+            // Pizarra de oficina (modulo de Productividad). Apagado: sin consulta.
+            'board' => $user->can('use-productivity')
+                ? tap(\App\Models\Announcement::query(), fn () => app(\App\Services\Productivity\BoardService::class)->ensureTodayBirthdays())
+                    ->active()->boardOrder()->with('author:id,name')->take(3)->get()
+                : null,
             'inbox' => $inbox->for($user, $shipments),
             'alerts' => $alerts,
             'preAlerts' => $preAlerts,

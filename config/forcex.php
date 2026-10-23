@@ -32,4 +32,10 @@ return [
     */
     'quotation_link_days' => (int) env('FORCEX_QUOTATION_LINK_DAYS', 30),
 
+    /*
+    | Modulo de Productividad: con cuantas horas de anticipacion se avisa en la
+    | campanita que una tarea esta por vencer (solo tareas con hora).
+    */
+    'task_reminder_hours' => (int) env('FORCEX_TASK_REMINDER_HOURS', 2),
+
 ];

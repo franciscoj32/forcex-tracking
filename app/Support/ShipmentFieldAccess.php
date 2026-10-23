@@ -112,7 +112,7 @@ final class ShipmentFieldAccess
     /** Campos que el usuario puede llenar al crear una RO. */
     public static function editableOnCreate(User $user): array
     {
-        return match ($user->role) {
+        return match ($user->permissionRole()) {
             // Al crear, el estado siempre arranca en "Creacion Routing Order".
             User::ROLE_ADMIN => array_values(array_diff(self::all(), self::TRACKING)),
             User::ROLE_COMERCIAL => self::merge(self::COMERCIAL, self::NOTAS),
@@ -123,7 +123,7 @@ final class ShipmentFieldAccess
     /** Campos que el usuario puede modificar en una RO existente. */
     public static function editableOnUpdate(User $user, Shipment $shipment): array
     {
-        return match ($user->role) {
+        return match ($user->permissionRole()) {
             User::ROLE_ADMIN => self::all(),
 
             // El Comercial corrige solo sus propias RO y solo mientras siguen

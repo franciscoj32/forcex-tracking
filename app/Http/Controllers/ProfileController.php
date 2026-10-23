@@ -48,6 +48,9 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        // La cuenta de Desarrollo es la que activa los modulos: no se borra sola.
+        abort_if($user->isDeveloper(), 403, 'La cuenta de Desarrollo no se puede eliminar.');
+
         Auth::logout();
 
         $user->delete();

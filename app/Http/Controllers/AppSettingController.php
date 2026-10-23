@@ -19,7 +19,11 @@ class AppSettingController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        // La marca (nombre, logo, sigla y colores) solo la cambia Desarrollo.
+        // A la Gerente esos campos no se le validan ni se guardan aunque los envie.
+        $canBrand = $request->user()->can('manage-branding');
+
+        $brandRules = $canBrand ? [
             'program_name' => ['required', 'string', 'max:255'],
             'company_name' => ['required', 'string', 'max:255'],
             'brand_abbr' => ['required', 'string', 'max:20'],
@@ -27,6 +31,14 @@ class AppSettingController extends Controller
             'remove_logo' => ['nullable', 'boolean'],
             'color_primario' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'color_acento' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+        ] : [];
+
+        // Modulos opcionales: tambien solo Desarrollo.
+        $moduleRules = $request->user()->can('manage-modules')
+            ? collect(AppSetting::MODULES)->mapWithKeys(fn (string $column) => [$column => ['required', 'boolean']])->all()
+            : [];
+
+        $data = $request->validate($brandRules + $moduleRules + [
             // PEN por 1 USD. Cada RO nueva copia este valor y lo congela.
             'tipo_cambio_referencial' => ['nullable', 'numeric', 'between:1,10'],
             // Semaforo de alertas: verde desde N dias, amarilla desde X h, roja desde Y h.
@@ -76,8 +88,10 @@ class AppSettingController extends Controller
             'cotizacion_validez_dias' => 'días de validez de las cotizaciones',
         ]);
 
-        $data['color_primario'] = strtoupper($data['color_primario']);
-        $data['color_acento'] = strtoupper($data['color_acento']);
+        if ($canBrand) {
+            $data['color_primario'] = strtoupper($data['color_primario']);
+            $data['color_acento'] = strtoupper($data['color_acento']);
+        }
 
         $settings = AppSetting::current();
 
@@ -88,12 +102,12 @@ class AppSettingController extends Controller
             $data['tipo_cambio_actualizado_en'] = now();
         }
 
-        if ($request->boolean('remove_logo') && filled($settings->logo_path)) {
+        if ($canBrand && $request->boolean('remove_logo') && filled($settings->logo_path)) {
             Storage::disk('public')->delete($settings->logo_path);
             $data['logo_path'] = null;
         }
 
-        if ($request->hasFile('logo_image')) {
+        if ($canBrand && $request->hasFile('logo_image')) {
             if (filled($settings->logo_path)) {
                 Storage::disk('public')->delete($settings->logo_path);
             }

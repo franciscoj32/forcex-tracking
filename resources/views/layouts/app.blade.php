@@ -15,6 +15,11 @@
                     ['label' => 'Clientes', 'route' => 'clientes.index', 'active' => ['clientes.*'], 'icon' => 'clients', 'can' => $user->can('viewAny', \App\Models\Client::class)],
                     ['label' => 'Cotizaciones', 'route' => 'cotizaciones.index', 'active' => ['cotizaciones.*'], 'icon' => 'quotation', 'can' => $user->can('viewAny', \App\Models\Quotation::class)],
                 ]],
+                // Modulo opcional de Productividad (solo si esta encendido en Configuracion).
+                ['title' => 'Equipo', 'items' => [
+                    ['label' => 'Tareas', 'route' => 'tareas.index', 'active' => ['tareas.*'], 'icon' => 'tasks', 'can' => $productivity !== null],
+                    ['label' => 'Pizarra', 'route' => 'pizarra.index', 'active' => ['pizarra.*'], 'icon' => 'megaphone', 'can' => $productivity !== null],
+                ]],
                 ['title' => 'Finanzas', 'items' => [
                     ['label' => 'Provisiones', 'route' => 'provisiones.index', 'active' => ['provisiones.*'], 'icon' => 'provisions', 'can' => $user->can('view-provisions')],
                     ['label' => 'Facturación', 'route' => 'facturacion.index', 'active' => ['facturacion.*'], 'icon' => 'billing', 'can' => $user->can('view-invoices')],
@@ -122,6 +127,10 @@
                             <div class="flex shrink-0 items-center gap-2">{{ $actions }}</div>
                         @endisset
 
+                        @if ($productivity)
+                            @include('productivity.partials.bell')
+                        @endif
+
                         <form method="GET" action="{{ route('embarques.index') }}" @class(['relative w-72 shrink-0', 'hidden', 'xl:block' => ! request()->routeIs('embarques.index')]) role="search">
                             <label for="global-search" class="sr-only">Buscar embarque</label>
                             <x-nav-icon name="search" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -151,6 +160,13 @@
                     {{ $slot }}
                 </main>
             </div>
+
+            @if ($productivity)
+                @include('productivity.partials.post-it')
+                @if ($productivity['birthday'])
+                    @include('productivity.partials.birthday')
+                @endif
+            @endif
 
             {{-- Aviso temporal de "guardado" --}}
             @php

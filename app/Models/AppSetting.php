@@ -33,6 +33,13 @@ class AppSetting extends Model
         'cuentas_bancarias',
         'cotizacion_condiciones',
         'cotizacion_validez_dias',
+        // Modulos opcionales (solo Desarrollo)
+        'modulo_productividad',
+    ];
+
+    /** Modulos opcionales: clave => columna de app_settings. */
+    public const MODULES = [
+        'productividad' => 'modulo_productividad',
     ];
 
     /** Condiciones por defecto de las cotizaciones (se editan en Configuracion). */
@@ -63,7 +70,19 @@ class AppSetting extends Model
             'alerta_dias_retraso_eta' => 'integer',
             'alerta_horas_prealerta' => 'integer',
             'cotizacion_validez_dias' => 'integer',
+            'modulo_productividad' => 'boolean',
         ];
+    }
+
+    /**
+     * ¿Esta encendido el modulo? Lee la configuracion ya cargada en memoria:
+     * no cuesta ninguna consulta. Si la migracion aun no corrio, queda apagado.
+     */
+    public static function moduleEnabled(string $module): bool
+    {
+        $column = self::MODULES[$module] ?? null;
+
+        return $column !== null && (bool) static::current()->getAttribute($column);
     }
 
     /** Tipo de cambio de referencia (PEN por USD) que toma cada RO nueva. */

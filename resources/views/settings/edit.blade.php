@@ -7,6 +7,29 @@
         @csrf
         @method('PUT')
 
+        {{-- Modulos opcionales: solo la cuenta de Desarrollo los enciende o apaga --}}
+        @can('manage-modules')
+            <section class="fx-card border-brand-200">
+                <div class="fx-card-header">
+                    <h2 class="fx-section-title">Módulos</h2>
+                    <span class="text-xs text-slate-500">Solo visible para Desarrollo</span>
+                </div>
+                <div class="fx-card-body space-y-3">
+                    <input type="hidden" name="modulo_productividad" value="0">
+                    <label class="flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50">
+                        <input type="checkbox" name="modulo_productividad" value="1" class="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-600/30"
+                            @checked(old('modulo_productividad', $settings->modulo_productividad))>
+                        <span>
+                            <span class="block font-medium text-slate-900">Productividad y Cultura</span>
+                            <span class="block text-sm text-slate-600">Tareas con lista y calendario, post-it flotante, pizarra de oficina, avisos en la campanita y cumpleaños. Apagado, no aparece en ninguna pantalla ni hace consultas.</span>
+                        </span>
+                    </label>
+                </div>
+            </section>
+        @endcan
+
+        {{-- Marca (nombre, logo, sigla y colores): solo la cuenta de Desarrollo --}}
+        @can('manage-branding')
         <section class="fx-card">
             <div class="fx-card-header">
                 <h2 class="fx-section-title">Empresa</h2>
@@ -40,6 +63,8 @@
                 </div>
             </div>
         </section>
+
+        @endcan
 
         <section class="fx-card">
             <div class="fx-card-header">
@@ -96,6 +121,7 @@
             </div>
         </section>
 
+        @can('manage-branding')
         <section class="fx-card" x-data="{ primary: @js(old('color_primario', $settings->color_primario)), accent: @js(old('color_acento', $settings->color_acento)) }">
             <div class="fx-card-header">
                 <h2 class="fx-section-title">Colores de marca</h2>
@@ -118,6 +144,8 @@
                 </div>
             </div>
         </section>
+
+        @endcan
 
         <section class="fx-card">
             <div class="fx-card-header">

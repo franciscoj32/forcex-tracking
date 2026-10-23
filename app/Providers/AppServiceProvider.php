@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\AppSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -49,6 +50,37 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('pendingMigrations', $pendingMigrations);
         });
+
+        // Modulo de Productividad: campanita, post-it y saludo de cumpleanos.
+        // Apagado, no hace ninguna consulta (el interruptor ya esta en memoria).
+        View::composer('layouts.app', function ($view): void {
+            $user = auth()->user();
+
+            if (! $user instanceof User || ! $user->can('use-productivity')) {
+                $view->with('productivity', null);
+
+                return;
+            }
+
+            app(\App\Services\Productivity\BoardService::class)->ensureTodayBirthdays();
+            $feed = app(\App\Services\Productivity\NotificationFeed::class);
+
+            $postIts = \App\Models\Task::query()
+                ->where('asignado_a_id', $user->id)
+                ->pending()
+                ->whereDate('fecha', '<=', today())
+                ->with(['shipment:id,routing_order', 'creator:id,name'])
+                ->agenda()
+                ->take(30)
+                ->get();
+
+            $view->with('productivity', [
+                'unread' => $feed->unreadCount($user),
+                'recent' => $feed->unreadSince($user, now()->subDay()),
+                'postIts' => $postIts->map->toPostItArray()->values()->all(),
+                'birthday' => $user->isBirthdayOn(),
+            ]);
+        });
     }
 
     /**
@@ -84,5 +116,16 @@ class AppServiceProvider extends ServiceProvider
 
         // Eliminaciones de registros financieros: solo el Administrador.
         Gate::define('delete-records', fn (User $user): bool => $user->isAdmin());
+
+        // Solo la cuenta de Desarrollo: marca (nombre, logo, sigla, colores) y
+        // modulos opcionales. La Gerente ve en Configuracion el tipo de cambio,
+        // los datos de la empresa, las cotizaciones y las alertas.
+        Gate::define('manage-branding', fn (User $user): bool => $user->isDeveloper());
+        Gate::define('manage-modules', fn (User $user): bool => $user->isDeveloper());
+
+        // Modulo opcional de Productividad y Cultura (tareas, pizarra, avisos, cumpleanos).
+        Gate::define('use-productivity', fn (User $user): bool => $user->isInternal() && AppSetting::moduleEnabled('productividad'));
+        // Pizarra de oficina: publica la Gerencia.
+        Gate::define('manage-announcements', fn (User $user): bool => $user->isAdmin() && AppSetting::moduleEnabled('productividad'));
     }
 }

@@ -22,6 +22,10 @@
     </x-slot>
 
     <div class="space-y-4">
+        @if (($board ?? null) !== null)
+            @include('productivity.board._preview')
+        @endif
+
         {{-- Pre-alertas de llegada pendientes: arriba de todo, hasta que se envien o se retengan.
              Cada aviso abre una ventana que carga el formulario de esa RO. --}}
         @if ($preAlerts->isNotEmpty())
