@@ -23,6 +23,7 @@ class NotificationLog extends Model
         'cliente_pendiente' => 'Cliente pendiente de aprobacion',
         'cliente_revisado' => 'Cliente aprobado / rechazado',
         'alerta_diaria' => 'Alertas diarias',
+        'cotizacion' => 'Cotización enviada',
     ];
 
     protected $fillable = [

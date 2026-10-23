@@ -5,6 +5,8 @@
         'home' => '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
         'shipments' => '<path d="M3 7h11v8H3z"/><path d="M14 10h3l3 3v2h-6z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="17.5" cy="17.5" r="1.5"/>',
         'clients' => '<path d="M4 20V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v15"/><path d="M14 9h5a1 1 0 0 1 1 1v10"/><path d="M3 20h18"/><path d="M8 8h2M8 12h2M8 16h2"/>',
+        // Hoja con signo de dolar (cotizaciones)
+        'quotation' => '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M13.8 11.2c-.4-.6-1-.9-1.8-.9-1 0-1.7.5-1.7 1.3 0 1.8 3.5 1 3.5 2.8 0 .8-.7 1.3-1.8 1.3-.8 0-1.5-.3-1.9-.9"/><path d="M12 9.3v1M12 15.7v1"/>',
         'provisions' => '<path d="M6 4h9l3 3v13H6z"/><path d="M15 4v4h4"/><path d="M9 12h6"/><path d="M9 16h4"/>',
         'billing' => '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/><path d="M8 15h3"/>',
         'suppliers' => '<path d="M3 17h13V7H3z"/><path d="M16 11h3l2 3v3h-5"/><circle cx="7" cy="18" r="1.5"/><circle cx="18" cy="18" r="1.5"/>',

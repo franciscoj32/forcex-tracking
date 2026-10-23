@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>FORCEX Tracking - Manual por rol</title>
+<style>
+    @page { margin: 22mm 18mm 20mm 18mm; }
+    * { font-family: DejaVu Sans, sans-serif; }
+    body { font-size: 10px; color: #0f172a; line-height: 1.45; }
+    h1 { font-size: 20px; color: #10235f; margin: 0 0 4px; }
+    h2 { font-size: 14px; color: #10235f; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 2px solid #1e40af; }
+    h3 { font-size: 11.5px; color: #1e40af; margin: 12px 0 4px; }
+    p { margin: 0 0 6px; }
+    ul { margin: 0 0 6px 0; padding-left: 16px; }
+    li { margin-bottom: 2px; }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+    th { background: #e0e4f4; color: #10235f; text-align: left; padding: 5px; font-size: 9.5px; border: 1px solid #c0cae9; }
+    td { padding: 5px; border: 1px solid #cbd5e1; vertical-align: top; }
+    .muted { color: #64748b; }
+    .cover { border-left: 5px solid #16a34a; padding: 8px 12px; background: #f1f5f9; margin-bottom: 10px; }
+    .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 7px 10px; margin: 6px 0 8px; }
+    .warn { border: 1px solid #fcd34d; background: #fffbeb; padding: 7px 10px; margin: 6px 0 8px; }
+    .tag { display: inline-block; background: #1e40af; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 9px; }
+    .page { page-break-before: always; }
+    .no { color: #b91c1c; }
+    .si { color: #15803d; }
+    .small { font-size: 9px; }
+</style>
+</head>
+<body>
+
+<h1>FORCEX Tracking</h1>
+<p class="muted">Manual por rol: Comercial, Customer Service y Operaciones · Octubre 2026</p>
+
+<div class="cover">
+    <p><strong>Para qué sirve este documento.</strong> Explica qué puede hacer cada usuario del sistema, hasta dónde llega su permiso y con quién coordina en cada paso de una carga. El rol de Administrador / Gerente tiene su propio manual.</p>
+    <p>Se entra al sistema con el <strong>usuario o el correo</strong> y la contraseña. Cada usuario ve todos los embarques, pero solo puede cambiar lo que le toca a su rol. Lo que no puede editar se muestra como "solo lectura".</p>
+</div>
+
+<h2>1. Usuarios de prueba</h2>
+<p>Estos usuarios existen solo si se cargaron los datos de prueba (<code>php artisan db:seed</code>). Sirven para practicar con 15 RO de ejemplo. <strong>No se usan para trabajar con datos reales.</strong></p>
+<table>
+    <tr><th style="width:22%">Usuario</th><th style="width:30%">Correo</th><th style="width:18%">Contraseña</th><th>Rol</th></tr>
+    <tr><td><strong>admin</strong></td><td>admin@forcexlogistics.com.pe</td><td>cambiar123</td><td>Administrador / Gerente</td></tr>
+    <tr><td><strong>juan_comercial</strong></td><td>comercial1@forcex.test</td><td>Demo123456</td><td>Comercial</td></tr>
+    <tr><td><strong>ana_comercial</strong></td><td>comercial2@forcex.test</td><td>Demo123456</td><td>Comercial</td></tr>
+    <tr><td><strong>maria_customer</strong></td><td>customer1@forcex.test</td><td>Demo123456</td><td>Customer Service</td></tr>
+    <tr><td><strong>diego_customer</strong></td><td>customer2@forcex.test</td><td>Demo123456</td><td>Customer Service</td></tr>
+    <tr><td><strong>carla_operaciones</strong></td><td>operaciones1@forcex.test</td><td>Demo123456</td><td>Operaciones</td></tr>
+    <tr><td><strong>luis_operaciones</strong></td><td>operaciones2@forcex.test</td><td>Demo123456</td><td>Operaciones</td></tr>
+    <tr><td>paola_andean · marco_minera</td><td>cliente.andean@ · cliente.minera@forcex.test</td><td>Demo123456</td><td>Cliente: <span class="no">no puede entrar</span> (ver punto 6)</td></tr>
+</table>
+<div class="warn small">Las contraseñas de prueba son conocidas. Si el sistema está en internet, borra los datos de prueba antes de empezar a trabajar con clientes reales y cambia la contraseña del admin al primer ingreso.</div>
+
+<h2>2. Cómo avanza una RO y quién hace cada paso</h2>
+<table>
+    <tr><th style="width:4%">#</th><th style="width:44%">Paso</th><th style="width:18%">Lo hace</th><th>Qué pasa después</th></tr>
+    <tr><td>1</td><td>Registrar el cliente (RUC, contactos, crédito propuesto)</td><td>Comercial</td><td>Queda "Por aprobar". El Administrador recibe un correo.</td></tr>
+    <tr><td>2</td><td>Aprobar o rechazar el cliente</td><td>Administrador</td><td>El Comercial recibe un correo. Si se rechaza, lo corrige y vuelve a revisión.</td></tr>
+    <tr><td>3</td><td>Crear la RO con sus tarifas de venta y elegir al Customer</td><td>Comercial</td><td>Correo al Customer ("Te asignaron una RO") y al cliente, con su código de seguimiento.</td></tr>
+    <tr><td>4</td><td>Asignar el operador</td><td>Customer</td><td>La RO aparece en el Inicio del Operador.</td></tr>
+    <tr><td>5</td><td>Completar los datos operativos: BL, nave, cut-off, ETD/ETA, contenedores</td><td>Operaciones</td><td>Si cambia la ETD o la ETA, el Customer debe validarla antes de que el cliente la vea.</td></tr>
+    <tr><td>6</td><td>Validar el cambio de fecha</td><td>Customer</td><td>El cliente recibe la nueva fecha por correo.</td></tr>
+    <tr><td>7</td><td>Subir y validar documentos (Commercial Invoice, Packing List, Borrador de BL)</td><td>Operaciones / Customer</td><td>El Customer los aprueba o los observa.</td></tr>
+    <tr><td>8</td><td>Registrar los hitos del tracking</td><td>Operaciones / Customer</td><td>El cliente ve cada hito en su página de seguimiento.</td></tr>
+    <tr><td>9</td><td>Enviar la Pre-alerta de llegada (72 h antes de la ETA)</td><td>Customer</td><td>Correo al cliente, a la agencia de aduana y al transportista. Se puede retener si hay deuda.</td></tr>
+    <tr><td>10</td><td>Registrar la tarja o el ingreso al almacén</td><td>Operaciones</td><td>Correo al cliente ("Tu carga llegó") y al Customer.</td></tr>
+    <tr><td>11</td><td>Registrar los costos (provisiones) y las facturas</td><td>Operaciones</td><td>El sistema calcula el margen.</td></tr>
+    <tr><td>12</td><td>Retiro, entrega y cierre ("Finalizado")</td><td>Operaciones / Customer</td><td>La RO sale de los activos.</td></tr>
+</table>
+<p class="small muted">Hitos del tracking, en orden: Creación Routing Order → Booking Confirmado → ATD → En tránsito → Transmisión Aduanas → ETA → Arribo a puerto → Descarga → Ingreso a almacén → Retiro de almacén → Entregado → Finalizado. Un hito solo puede avanzar, nunca retroceder.</p>
+
+<!-- ================= COMERCIAL ================= -->
+<h2 class="page">3. Comercial</h2>
+<p><span class="tag">Vende y abre la RO</span> Es quien consigue al cliente, pacta las tarifas y registra la orden. Después de crearla, el seguimiento pasa al Customer.</p>
+
+<h3>Menú que ve</h3>
+<p>Inicio · Embarques · Clientes · Cotizaciones · Facturación (solo consulta) · Reportes.</p>
+
+<h3>Qué puede hacer</h3>
+<ul>
+    <li><strong>Registrar clientes:</strong> razón social, RUC, contactos (quiénes reciben los avisos de la carga), condición de crédito propuesta y línea de crédito. El cliente queda "Por aprobar" hasta que el Administrador lo revise.</li>
+    <li><strong>Corregir sus clientes</strong> mientras están por aprobar o rechazados. Al corregir uno rechazado, vuelve a revisión.</li>
+    <li><strong>Agregar contactos</strong> a cualquier cliente.</li>
+    <li><strong>Crear RO</strong>, solo para clientes aprobados. Llena la OT, la RO, el tipo de carga (FCL, LCL o aéreo), el incoterm, el origen, los puertos de carga y descarga, el destino final, el consignatario, el <strong>Customer que la atenderá</strong>, al menos una <strong>tarifa de venta</strong> y observaciones.</li>
+    <li><strong>Corregir sus RO</strong> solo mientras siguen en "Creación Routing Order". Después de ese paso, solo el Administrador puede cambiar esos datos.</li>
+    <li><strong>Consultar</strong> todas las RO: datos, hitos, documentos (descargarlos), facturas y reportes.</li>
+    <li><strong>Exportar a Excel</strong> la lista de embarques y el Excel financiero de <strong>sus propias</strong> RO.</li>
+    <li><strong>Cotizar</strong> (menú Cotizaciones o botón "Cotizar" en la ficha del cliente). Escribe el RUC: si ya es cliente, el sistema completa sus datos; si no, los escribe a mano y queda como prospecto. Agrega las tarifas y marca "IGV" en los gastos locales (el flete internacional es inafecto). Los totales se calculan por moneda con IGV 18 %.</li>
+    <li><strong>Enviar la cotización</strong> por <strong>correo</strong> (con el PDF adjunto; las respuestas le llegan a él) o por <strong>WhatsApp</strong> (se abre su WhatsApp con un enlace al PDF que dura 30 días). Cuando el cliente responde, la marca como <strong>Aceptada</strong> o <strong>Rechazada</strong>.</li>
+    <li>Solo ve <strong>sus</strong> cotizaciones. Puede editarlas mientras no estén aceptadas o rechazadas, y eliminar solo sus borradores.</li>
+</ul>
+
+<h3>Alcance de su permiso</h3>
+<table>
+    <tr><th style="width:50%">Puede ver</th><th>No puede</th></tr>
+    <tr>
+        <td>
+            <ul>
+                <li>En <strong>sus</strong> RO: venta, costo y <strong>margen</strong>.</li>
+                <li>En RO de otros comerciales: solo la venta.</li>
+                <li>En el Inicio: sus números del mes (embarques, venta, costo, margen, retrasados) y su <strong>posición en el ranking</strong>.</li>
+                <li>El código de seguimiento del cliente.</li>
+            </ul>
+        </td>
+        <td>
+            <ul>
+                <li class="no">Registrar hitos, cambiar fechas (ETD/ETA), subir o validar documentos.</li>
+                <li class="no">Ver el módulo de Provisiones (costos) ni Proveedores.</li>
+                <li class="no">Ver el margen de las RO de otros comerciales.</li>
+                <li class="no">Aprobar clientes o borrar registros.</li>
+                <li class="no">Asignar al operador.</li>
+            </ul>
+        </td>
+    </tr>
+</table>
+
+<h3>Su Inicio</h3>
+<ul>
+    <li><strong>Requiere tu acción:</strong> sus clientes esperando aprobación, y los rechazados con el botón "Corregir".</li>
+    <li><strong>Alertas:</strong> solo la ETA vencida o retrasada de sus RO, para informar al cliente si llama. Son de solo lectura.</li>
+</ul>
+
+<h3>Correos</h3>
+<ul>
+    <li><strong>Recibe:</strong> "Cliente aprobado" o "Cliente rechazado" (con el motivo).</li>
+    <li><strong>Al crear una RO</strong>, el sistema avisa al Customer asignado y al cliente.</li>
+    <li><strong>Al registrar un cliente</strong>, avisa al Administrador.</li>
+</ul>
+
+<h3>Con quién coordina</h3>
+<table>
+    <tr><th style="width:25%">Con</th><th>Para qué</th></tr>
+    <tr><td>Administrador</td><td>Aprobación de clientes nuevos y de su crédito. Correcciones de una RO que ya avanzó.</td></tr>
+    <tr><td>Customer Service</td><td>Le entrega la RO: desde ese momento el Customer es el único contacto con el cliente.</td></tr>
+    <tr><td>Cliente</td><td>Negociación y tarifas. El seguimiento de la carga lo lleva el Customer.</td></tr>
+</table>
+
+<!-- ================= CUSTOMER ================= -->
+<h2 class="page">4. Customer Service</h2>
+<p><span class="tag">Único contacto con el cliente</span> Coordina la carga de principio a fin: decide qué operador la ejecuta, valida lo que el cliente va a ver y le avisa de cada novedad.</p>
+
+<h3>Menú que ve</h3>
+<p>Inicio · Embarques · Clientes · Cotizaciones (consulta) · Provisiones (consulta) · Facturación (consulta) · Proveedores (consulta) · Reportes.</p>
+
+<h3>En las RO donde es el Customer asignado</h3>
+<ul>
+    <li><strong>Asignar el operador</strong> de la RO.</li>
+    <li><strong>Validar o descartar los cambios de ETD/ETA</strong> que hace Operaciones, uno por uno o todos juntos (en una actualización masiva por nave). Puede escribir una nota para el cliente. Si valida, el cliente recibe la nueva fecha por correo. Si descarta, el cliente sigue viendo la fecha anterior.</li>
+    <li><strong>Nota al cliente:</strong> aparece en su página de seguimiento y, si se marca, también le llega por correo.</li>
+    <li><strong>WhatsApp al cliente</strong> (sin costo): elige un contacto y un mensaje sugerido (estado, fecha de llegada, carga en almacén o mensaje libre), lo edita y se abre su WhatsApp para enviarlo. Queda registrado en el historial.</li>
+    <li><strong>Validar documentos</strong> (Commercial Invoice, Packing List, Borrador de BL): los aprueba, o los observa con un motivo para pedir la versión corregida.</li>
+    <li><strong>Pre-alerta de llegada:</strong> 72 h antes de la ETA aparece el botón <strong>"Pre-alerta de llegada pendiente"</strong>, arriba de todo en el Inicio y en "Requiere atención" de la ficha. Sigue visible hasta que se envíe. Al hacer clic se abre una ventana con el <strong>estado de cobro del cliente</strong> (condición de crédito y facturas por cobrar), elige destinatarios (cliente, agencia de aduana, transportista y hasta 3 correos más) y los documentos a adjuntar.
+        <ul>
+            <li><strong>"Enviar pre-alerta a externos":</strong> cada destinatario recibe su propio correo.</li>
+            <li><strong>"Retener":</strong> pide un motivo, por ejemplo "facturas pendientes de pago". La alerta sigue en su Inicio hasta que la envíe.</li>
+            <li>No se puede enviar si hay un cambio de ETA esperando validación.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>En cualquier RO</h3>
+<ul>
+    <li><strong>Registrar hitos</strong> del tracking (solo hacia adelante).</li>
+    <li><strong>Subir y eliminar documentos.</strong></li>
+    <li><strong>Actualización masiva de hitos</strong> por nave y viaje (el mismo hito a varias RO). Las fechas en masa son de Operaciones.</li>
+    <li><strong>Observaciones internas</strong> y quiénes son <strong>responsables o siguen la RO</strong> (reciben sus alertas).</li>
+    <li><strong>Agregar contactos</strong> a los clientes.</li>
+</ul>
+
+<h3>Alcance de su permiso</h3>
+<table>
+    <tr><th style="width:50%">Puede ver</th><th>No puede</th></tr>
+    <tr>
+        <td>
+            <ul>
+                <li>La venta y el costo de cada RO.</li>
+                <li>Las provisiones, los proveedores y las facturas (solo consulta).</li>
+                <li>El código de seguimiento del cliente.</li>
+            </ul>
+        </td>
+        <td>
+            <ul>
+                <li class="no">Ver el margen.</li>
+                <li class="no">Cambiar datos operativos (BL, nave, fechas, contenedores, tarja). Son de Operaciones.</li>
+                <li class="no">Cambiar los datos comerciales o las tarifas. Son del Comercial.</li>
+                <li class="no">Validar fechas, enviar pre-alertas o validar documentos de RO de <strong>otro</strong> Customer.</li>
+                <li class="no">Registrar costos o facturas.</li>
+            </ul>
+        </td>
+    </tr>
+</table>
+
+<h3>Su Inicio</h3>
+<ul>
+    <li><strong>Requiere tu acción:</strong>
+        <ul>
+            <li>cambios de fecha por validar (los masivos aparecen juntos: "Cambio de ETA en 5 RO");</li>
+            <li>RO sin operador;</li>
+            <li>documentos obligatorios que faltan;</li>
+            <li>documentos por validar;</li>
+            <li>documentos observados.</li>
+        </ul>
+    </li>
+    <li><strong>Alertas de sus RO</strong>: cut-off, ETA vencida, ETA retrasada, demurrage, detention, almacenaje y pre-alerta de llegada. Puede marcarlas como <strong>Vista</strong> o <strong>Posponerlas</strong> (4 h o hasta mañana a las 8:00). Si una alerta roja pasa 4 h sin atenderse, la ve también el Administrador.</li>
+</ul>
+<p class="small muted">Semáforo: verde de 5 días a 48 h, amarilla de 48 h a 24 h, roja con 24 h o menos o ya vencida. La pre-alerta aparece en amarillo 72 h antes de la ETA.</p>
+
+<h3>Correos</h3>
+<ul>
+    <li><strong>Recibe:</strong>
+        <ul>
+            <li>"Te asignaron una nueva RO";</li>
+            <li>"Cambio de ETD/ETA por validar";</li>
+            <li>"Tarja registrada";</li>
+            <li>el resumen diario de alertas a las 7:00.</li>
+        </ul>
+    </li>
+    <li><strong>Lo que dispara con sus acciones:</strong> las fechas que valida, sus notas y las pre-alertas le llegan al cliente.</li>
+    <li><strong>Respuestas:</strong> todos los correos al cliente salen con su dirección para responder, así que si el cliente contesta, le escribe directamente al Customer.</li>
+</ul>
+
+<h3>Con quién coordina</h3>
+<table>
+    <tr><th style="width:25%">Con</th><th>Para qué</th></tr>
+    <tr><td>Comercial</td><td>Recibe la RO ya vendida, con sus tarifas.</td></tr>
+    <tr><td>Operaciones</td><td>Le asigna la RO, valida los cambios de fecha que informa y le pide correcciones de documentos.</td></tr>
+    <tr><td>Cliente</td><td>Le comunica fechas, novedades y documentos observados (correo, nota o WhatsApp).</td></tr>
+    <tr><td>Agencia de aduana y transportista</td><td>Les envía la pre-alerta para el despacho anticipado y el retiro.</td></tr>
+    <tr><td>Administrador</td><td>Apoyo en alertas escaladas y casos especiales (crédito, correcciones).</td></tr>
+</table>
+
+<!-- ================= OPERACIONES ================= -->
+<h2 class="page">5. Operaciones</h2>
+<p><span class="tag">Dueño de los datos técnicos</span> Registra la información real de la carga: booking, fechas, contenedores, tarja y costos.</p>
+
+<h3>Menú que ve</h3>
+<p>Inicio · Embarques · Clientes (consulta) · Provisiones · Facturación · Proveedores · Reportes.</p>
+
+<h3>Qué puede hacer</h3>
+<ul>
+    <li><strong>Datos operativos de la RO</strong> (en cualquier RO):
+        <ul>
+            <li>BL, naviera, nave, viaje, agente de origen, puertos, peso y volumen;</li>
+            <li>cut-off, ETD, ETA y fecha de descarga;</li>
+            <li>días libres de demurrage y detention;</li>
+            <li>endoso;</li>
+            <li>"dónde está ahora" (ubicación);</li>
+            <li>almacén de direccionamiento, tarja (fecha, bultos, peso), ingreso al almacén y días libres de almacén.</li>
+        </ul>
+    </li>
+    <li><strong>Contenedores</strong> (FCL y LCL; no aplica a aéreo), con su fecha de retiro y de devolución del vacío.</li>
+    <li><strong>Marcar el cut-off como cumplido</strong> antes del zarpe.</li>
+    <li><strong>Registrar hitos</strong> del tracking (solo hacia adelante) y notas internas.</li>
+    <li><strong>Subir documentos.</strong></li>
+    <li><strong>Actualización masiva por nave y viaje</strong> (hasta 50 RO a la vez): la misma ETD o ETA, o el mismo hito. El cut-off no se cambia en masa. Cada RO se revisa con sus reglas; las que no cumplen se omiten y se muestra el motivo.</li>
+    <li><strong>Provisiones:</strong> registra y edita los costos de proveedores y si están pagados.</li>
+    <li><strong>Facturas al cliente:</strong> registra y edita el número, el monto, la moneda, el estado y el PDF.</li>
+    <li><strong>Proveedores:</strong> registra y edita navieras, agencias de aduana, almacenes, transportistas, etc. El <strong>correo</strong> es importante, porque a ese correo le llega la pre-alerta.</li>
+</ul>
+
+<div class="box">
+    <p><strong>Cambios de ETD/ETA:</strong> el cambio se guarda al instante, pero <strong>el cliente sigue viendo la fecha anterior</strong> hasta que el Customer la valide. El Customer recibe un correo para validarla.</p>
+    <p><strong>Tarja o ingreso al almacén:</strong> la primera vez que se registra, el sistema avisa al cliente ("Tu carga llegó") y al Customer.</p>
+</div>
+
+<h3>Alcance de su permiso</h3>
+<table>
+    <tr><th style="width:50%">Puede ver</th><th>No puede</th></tr>
+    <tr>
+        <td>
+            <ul>
+                <li>Todas las RO, con sus documentos e hitos.</li>
+                <li>Los costos (provisiones) y las facturas.</li>
+                <li>Los clientes (solo consulta).</li>
+            </ul>
+        </td>
+        <td>
+            <ul>
+                <li class="no">Ver las tarifas de venta ni el margen.</li>
+                <li class="no">Validar cambios de fecha, validar documentos o enviar la pre-alerta. Lo hace el Customer.</li>
+                <li class="no">Cambiar los datos comerciales, el Customer o el operador asignado.</li>
+                <li class="no">Eliminar provisiones, facturas o RO.</li>
+            </ul>
+        </td>
+    </tr>
+</table>
+
+<h3>Su Inicio</h3>
+<ul>
+    <li><strong>Requiere tu acción:</strong>
+        <ul>
+            <li>FCL sin contenedores registrados;</li>
+            <li>carga que arribó y no tiene tarja;</li>
+            <li>documentos obligatorios que faltan;</li>
+            <li>documentos observados (subir la corrección);</li>
+            <li>costos pendientes de pago de sus RO.</li>
+        </ul>
+    </li>
+    <li><strong>Alertas de sus RO:</strong> cut-off, ETA, demurrage, detention, almacenaje y pre-alerta (esta última solo para saberlo; la envía el Customer). Puede marcarlas como Vista o Posponerlas.</li>
+</ul>
+
+<h3>Correos</h3>
+<ul>
+    <li><strong>Recibe:</strong> el resumen diario de alertas a las 7:00.</li>
+    <li><strong>Lo que dispara con sus acciones:</strong> el aviso de cambio de fecha al Customer, y el aviso de llegada (tarja) al cliente y al Customer.</li>
+</ul>
+
+<h3>Con quién coordina</h3>
+<table>
+    <tr><th style="width:25%">Con</th><th>Para qué</th></tr>
+    <tr><td>Customer Service</td><td>Recibe la RO asignada. Le informa los cambios de fecha (para que los valide) y la llegada de la carga.</td></tr>
+    <tr><td>Navieras, almacenes, transportistas</td><td>Fuente de los datos reales (booking, fechas, tarja) y de los costos que registra.</td></tr>
+    <tr><td>Administrador</td><td>Eliminación de registros financieros y correcciones fuera de su alcance.</td></tr>
+</table>
+
+<!-- ================= CLIENTE ================= -->
+<h2>6. El cliente</h2>
+<ul>
+    <li><strong>Acceso:</strong> el cliente <strong>no entra al sistema</strong>. Sigue su carga en la página pública de seguimiento con el <strong>código</strong> que le llega en el primer correo (por ejemplo, FX-AB12CD34).</li>
+    <li><strong>Qué ve:</strong> el avance con textos estándar, las fechas validadas por el Customer y las notas del Customer. Nunca ve costos, notas internas ni fechas sin validar.</li>
+    <li><strong>Correos que recibe</strong> (solo los contactos marcados para recibir avisos):
+        <ul>
+            <li>registro de la RO;</li>
+            <li>fecha confirmada o reprogramada;</li>
+            <li>pre-alerta de llegada;</li>
+            <li>carga en almacén;</li>
+            <li>notas del Customer.</li>
+        </ul>
+        Si responde, le llega a su Customer.
+    </li>
+</ul>
+
+<h2>7. Resumen rápido de permisos</h2>
+<table class="small">
+    <tr><th style="width:40%">Acción</th><th>Comercial</th><th>Customer</th><th>Operaciones</th></tr>
+    <tr><td>Registrar clientes</td><td class="si">Sí (los aprueba el Admin)</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Agregar contactos a un cliente</td><td class="si">Sí</td><td class="si">Sí</td><td class="no">No</td></tr>
+    <tr><td>Crear RO y tarifas de venta</td><td class="si">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Cotizaciones (crear, enviar por correo o WhatsApp)</td><td class="si">Sí (solo las suyas)</td><td>Consulta todas</td><td class="no">No ve el módulo</td></tr>
+    <tr><td>Asignar operador</td><td class="no">No</td><td class="si">Sí</td><td class="no">No</td></tr>
+    <tr><td>Datos operativos, fechas, contenedores, tarja</td><td class="no">No</td><td class="no">No</td><td class="si">Sí</td></tr>
+    <tr><td>Registrar hitos</td><td class="no">No</td><td class="si">Sí</td><td class="si">Sí</td></tr>
+    <tr><td>Validar cambios de fecha</td><td class="no">No</td><td class="si">Sí (sus RO)</td><td class="no">No</td></tr>
+    <tr><td>Notas, WhatsApp y pre-alerta al cliente</td><td class="no">No</td><td class="si">Sí (sus RO)</td><td class="no">No</td></tr>
+    <tr><td>Subir documentos</td><td class="no">No</td><td class="si">Sí</td><td class="si">Sí</td></tr>
+    <tr><td>Validar documentos</td><td class="no">No</td><td class="si">Sí (sus RO)</td><td class="no">No</td></tr>
+    <tr><td>Actualización masiva</td><td class="no">No</td><td>Solo hitos</td><td class="si">Fechas e hitos</td></tr>
+    <tr><td>Provisiones (costos)</td><td class="no">No ve el módulo</td><td>Consulta</td><td class="si">Registra</td></tr>
+    <tr><td>Facturas</td><td>Consulta</td><td>Consulta</td><td class="si">Registra</td></tr>
+    <tr><td>Proveedores</td><td class="no">No ve el módulo</td><td>Consulta</td><td class="si">Registra</td></tr>
+    <tr><td>Ver venta / costo / margen</td><td>Venta; costo y margen de sus RO</td><td>Venta y costo</td><td>Solo costo</td></tr>
+</table>
+
+</body>
+</html>

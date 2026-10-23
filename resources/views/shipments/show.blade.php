@@ -30,6 +30,14 @@
     $now = \Carbon\CarbonImmutable::now();
     $shipmentAlerts = \App\Services\Alerts\AlertBoard::make()->forShipment($shipment, $now);
     $visibleAlerts = $shipmentAlerts->where('level', '!=', \App\Services\Alerts\AlertLevel::NONE)->values();
+    // Pre-alerta pendiente: quien puede enviarla ve un aviso destacado arriba que abre la ventana.
+    $preAlertAlert = $visibleAlerts->first(fn ($alert) => $alert->type === \App\Services\Alerts\Alert::PRE_ARRIVAL);
+    $preAlertForm = $preAlertAlert && $user->can('sendPreAlert', $shipment)
+        ? app(\App\Services\PreAlertService::class)->formData($shipment)
+        : null;
+    if ($preAlertForm) {
+        $visibleAlerts = $visibleAlerts->reject(fn ($alert) => $alert === $preAlertAlert)->values();
+    }
     $missingDocuments = \App\Support\ShipmentAttention::missingRequiredDocuments($shipment);
     $validationQueue = \App\Support\ShipmentAttention::documentValidationQueue($shipment);
     $isFinished = $shipment->estado_actual === 'Finalizado';
@@ -140,14 +148,19 @@
         </section>
 
         {{-- Requiere atencion: alertas de plazo y tareas, solo si hay algo --}}
-        @if ($attention !== [] || $visibleAlerts->isNotEmpty())
-            @php $hasDanger = collect($attention)->contains('level', 'danger') || $visibleAlerts->contains('level', 'danger'); @endphp
+        @if ($attention !== [] || $visibleAlerts->isNotEmpty() || $preAlertForm)
+            @php $hasDanger = collect($attention)->contains('level', 'danger') || $visibleAlerts->contains('level', 'danger') || $preAlertAlert?->level === \App\Services\Alerts\AlertLevel::DANGER; @endphp
             <section @class([
                 'fx-card border-l-4 p-4',
                 'border-l-rose-600' => $hasDanger,
                 'border-l-amber-500' => ! $hasDanger,
             ])>
                 <h2 class="fx-section-title">Requiere atención</h2>
+                @if ($preAlertForm)
+                    <div class="mt-2">
+                        @include('alerts.pre-alert-trigger', ['alert' => $preAlertAlert, 'opens' => 'dialog'])
+                    </div>
+                @endif
                 <ul class="mt-2 divide-y divide-slate-100">
                     @foreach ($visibleAlerts as $alert)
                         @include('alerts.row', ['alert' => $alert, 'compact' => true])
@@ -244,6 +257,15 @@
                     </section>
                 </div>
             </template>
+        @endif
+
+        {{-- Ventana de la pre-alerta: se abre desde el aviso de "Requiere atencion".
+             Si el envio vuelve con errores, se abre sola con lo que se escribio. --}}
+        @if ($preAlertForm)
+            <x-dialog name="pre-alerta" title="Pre-alerta de llegada · {{ $shipment->routing_order }}" max-width="max-w-5xl"
+                      :show="$errors->any() && old('_form') === 'pre_alerta' && (int) old('_shipment') === $shipment->id">
+                @include('shipments.partials.pre-alert-form', $preAlertForm + ['volver' => 'ficha'])
+            </x-dialog>
         @endif
     </div>
 </x-app-layout>

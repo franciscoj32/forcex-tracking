@@ -6,11 +6,13 @@ use App\Models\Document;
 use App\Models\Shipment;
 use App\Models\User;
 use App\Services\ActionInbox;
+use App\Services\Alerts\Alert;
 use App\Services\Alerts\AlertBoard;
 use App\Services\Alerts\AlertDetector;
 use App\Services\Alerts\AlertThresholds;
 use App\Services\ManagementMetrics;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 
 /**
  * Inicio: responde "¿que tengo que hacer hoy?".
@@ -32,13 +34,37 @@ class DashboardController extends Controller
         // Las RO vinculadas se cargan una vez: alimentan las tareas y las alertas.
         $shipments = $inbox->shipmentsFor($user);
         $limits = AlertThresholds::fromSettings();
+        [$alerts, $preAlerts] = $this->splitPreAlerts((new AlertBoard(new AlertDetector($limits), $limits))->for($user, $shipments), $user);
 
         return view('dashboard', [
             'inbox' => $inbox->for($user, $shipments),
-            'alerts' => (new AlertBoard(new AlertDetector($limits), $limits))->for($user, $shipments),
+            'alerts' => $alerts,
+            'preAlerts' => $preAlerts,
             'alertLimits' => $limits,
             'month' => $this->monthPanel($user, $metrics, request('mes')),
         ]);
+    }
+
+    /**
+     * Las pre-alertas que el usuario puede enviar salen de la lista de alertas y
+     * van como aviso destacado arriba del Inicio, aunque se hayan marcado como
+     * vistas o pospuestas: siguen visibles hasta que se envien o se retengan.
+     *
+     * @param  array{activas: Collection, vistas: Collection, pospuestas: Collection}  $alerts
+     * @return array{0: array{activas: Collection, vistas: Collection, pospuestas: Collection}, 1: Collection}
+     */
+    private function splitPreAlerts(array $alerts, User $user): array
+    {
+        $isSendable = fn (Alert $alert) => $alert->type === Alert::PRE_ARRIVAL && $user->can('sendPreAlert', $alert->shipment);
+        $preAlerts = collect();
+
+        foreach ($alerts as $group => $list) {
+            [$sendable, $rest] = $list->partition($isSendable);
+            $preAlerts = $preAlerts->merge($sendable);
+            $alerts[$group] = $rest->values();
+        }
+
+        return [$alerts, AlertBoard::sort($preAlerts)];
     }
 
     /** Numeros del mes para Admin (toda la empresa) y Comercial (sus RO). */

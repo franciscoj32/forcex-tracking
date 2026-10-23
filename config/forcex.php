@@ -22,4 +22,14 @@ return [
     */
     'whatsapp_country_code' => env('FORCEX_WHATSAPP_COUNTRY_CODE', '51'),
 
+    /*
+    | Tasa de IGV de las cotizaciones (solo para las lineas marcadas como afectas).
+    */
+    'igv_rate' => (float) env('FORCEX_IGV_RATE', 0.18),
+
+    /*
+    | Dias que dura el enlace del PDF de una cotizacion enviada por WhatsApp.
+    */
+    'quotation_link_days' => (int) env('FORCEX_QUOTATION_LINK_DAYS', 30),
+
 ];

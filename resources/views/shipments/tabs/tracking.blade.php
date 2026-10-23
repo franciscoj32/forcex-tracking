@@ -259,47 +259,8 @@
             </section>
         @endif
 
-        {{-- Pre-alerta de llegada: aviso a cliente, agencia de aduana y transportista --}}
-        @php
-            $lastPreAlert = $shipment->preAlerts()->with('user:id,name')->first();
-            $preAlertEta = $shipment->fecha_eta;
-            $preAlertPending = $preAlertEta && $shipment->isBeforeArrival();
-            $preAlertCurrent = $lastPreAlert?->isSent() && $preAlertEta && $lastPreAlert->eta_enviada?->isSameDay($preAlertEta);
-            $canSendPreAlert = auth()->user()->can('sendPreAlert', $shipment);
-        @endphp
-        @if ($preAlertPending || $lastPreAlert)
-            <section id="pre-alerta" class="fx-card scroll-mt-20">
-                <h2 class="fx-section-title flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-                    <x-nav-icon name="send" class="h-4 w-4 text-slate-500" />
-                    Pre-alerta de llegada
-                </h2>
-                <div class="space-y-3 p-4 text-sm">
-                    @if ($preAlertCurrent)
-                        <p class="text-slate-700">
-                            <span class="font-medium text-accent-700">Enviada</span> con ETA {{ $lastPreAlert->eta_enviada->format('d/m/Y') }}
-                            a {{ $lastPreAlert->recipientsSummary() }}.
-                        </p>
-                        <p class="text-xs text-slate-500">{{ $lastPreAlert->user->name }} · {{ $lastPreAlert->created_at->format('d/m/Y H:i') }}</p>
-                    @elseif ($lastPreAlert?->isHeld())
-                        <p class="text-slate-700"><span class="font-medium text-slate-900">Retenida:</span> {{ $lastPreAlert->motivo_retencion }}</p>
-                        <p class="text-xs text-slate-500">{{ $lastPreAlert->user->name }} · {{ $lastPreAlert->created_at->format('d/m/Y H:i') }}</p>
-                    @elseif ($lastPreAlert?->isSent() && $preAlertPending)
-                        <p class="text-amber-800">Se envió con ETA {{ $lastPreAlert->eta_enviada?->format('d/m/Y') }}. La ETA ahora es {{ $preAlertEta->format('d/m/Y') }}: falta reenviarla.</p>
-                    @elseif ($preAlertPending)
-                        <p class="text-slate-700">Pendiente. Se pide {{ \App\Services\Alerts\AlertThresholds::fromSettings()->preAlertHours }} h antes de la ETA ({{ $preAlertEta->format('d/m/Y') }}).</p>
-                    @else
-                        <p class="text-slate-500">La carga ya arribó.</p>
-                    @endif
-
-                    @if ($canSendPreAlert && $preAlertPending)
-                        <a href="{{ route('embarques.pre-alerta', $shipment) }}" class="{{ $preAlertCurrent ? 'fx-btn-secondary' : 'fx-btn-primary' }} w-full">
-                            {{ $preAlertCurrent ? 'Ver o reenviar' : 'Preparar pre-alerta' }}
-                        </a>
-                    @elseif (! $canSendPreAlert && $preAlertPending && ! $preAlertCurrent)
-                        <p class="text-xs text-slate-500">La envía el Customer de la RO.</p>
-                    @endif
-                </div>
-            </section>
-        @endif
+        {{-- La pre-alerta de llegada ya no vive aqui: aparece como aviso destacado en
+             "Requiere atencion" y se completa en una ventana emergente. Lo enviado
+             queda en "Correos enviados" y en el historial. --}}
     </div>
 </div>

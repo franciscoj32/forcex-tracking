@@ -10,6 +10,7 @@ use App\Http\Controllers\DocumentValidationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProvisionController;
 use App\Http\Controllers\PublicTrackingController;
+use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\RateConceptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReportExportController;
@@ -35,6 +36,11 @@ Route::get('/', function () {
 
 Route::get('/tracking-publico', PublicTrackingController::class)->name('tracking.public');
 
+// PDF de la cotizacion compartido por WhatsApp: enlace firmado que vence (sin iniciar sesion).
+Route::get('/cotizacion-pdf/{quotation}', [QuotationController::class, 'publicPdf'])
+    ->middleware('signed:relative')
+    ->name('cotizaciones.publica');
+
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
@@ -45,6 +51,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/clientes/{client}/contactos', [ClientContactController::class, 'store'])->name('clientes.contactos.store');
     Route::put('/contactos/{contact}', [ClientContactController::class, 'update'])->name('contactos.update');
     Route::delete('/contactos/{contact}', [ClientContactController::class, 'destroy'])->name('contactos.destroy');
+
+    Route::get('/cotizaciones-buscar-ruc', [QuotationController::class, 'lookupRuc'])->name('cotizaciones.ruc');
+    Route::resource('cotizaciones', QuotationController::class)
+        ->parameters(['cotizaciones' => 'quotation']);
+    Route::get('/cotizaciones/{quotation}/pdf', [QuotationController::class, 'pdf'])->name('cotizaciones.pdf');
+    Route::post('/cotizaciones/{quotation}/correo', [QuotationController::class, 'email'])->name('cotizaciones.correo');
+    Route::post('/cotizaciones/{quotation}/whatsapp', [QuotationController::class, 'whatsapp'])->name('cotizaciones.whatsapp');
+    Route::post('/cotizaciones/{quotation}/estado', [QuotationController::class, 'status'])->name('cotizaciones.estado');
 
     Route::resource('usuarios', UserController::class)
         ->parameters(['usuarios' => 'user'])

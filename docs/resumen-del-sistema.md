@@ -55,7 +55,8 @@ Cada cambio de la ficha queda en el **historial interno** del embarque: quién c
 | **Embarques** | Lista con vistas rápidas: Activos, Retrasados, Arriban en 7 días, Fecha por validar, Finalizados y Todos. Búsqueda por OT, RO, BL, nave o código; filtros por cliente, tipo y "Solo míos"; RO destacadas (fijadas); exportación a Excel. |
 | **Actualización masiva** | Desde Embarques. Agrupa las RO activas por **nave y viaje**. Permite cambiar la ETD o la ETA (Operaciones y Admin) o registrar un hito (también el Customer) a varias RO a la vez, hasta 50. Cada RO se revisa con sus reglas; las que no cumplen se omiten y se muestra el motivo. El cut-off no se cambia en masa. |
 | **Ficha del embarque** | Encabezado con el código de seguimiento resaltado y el bloque "Requiere atención". Pestañas: **Resumen**, **Seguimiento**, **Documentos** y **Finanzas**, cada una con su icono. PDF del estado para enviar al cliente. |
-| **Clientes** | Vistas Todos, Por aprobar, Aprobados y Rechazados. Ficha con contactos, crédito y embarques. |
+| **Clientes** | Vistas Todos, Por aprobar, Aprobados y Rechazados. Ficha con contactos, crédito y embarques, y botón **Cotizar**. |
+| **Cotizaciones** | Debajo de Clientes. Vistas Todas, Borradores, Enviadas, Aceptadas, Rechazadas y Vencidas; búsqueda por número, RUC o razón social; filtro por comercial (Admin y Customer). Ver la sección 5b. |
 | **Provisiones** | Costos de proveedores: Por pagar, Pagados y Todos. Se crean desde una ventana emergente. Por defecto se agrupan **por proveedor** (para pagar en bloque); también por RO o sin agrupar. Cada grupo muestra cuántas provisiones tiene, cuántas están por pagar y su total por moneda. |
 | **Facturación** | Facturas al cliente: Por cobrar, Pagadas y Todas. Se crean desde una ventana emergente. Por defecto se agrupan **por cliente** (para cobrar); también por RO o sin agrupar. |
 | **Proveedores** y **Conceptos** | Catálogos de proveedores y de conceptos de tarifa (flete, THC, etc.). |
@@ -99,8 +100,9 @@ Las alertas son plazos que el sistema detecta solo. Las tareas son lo que depend
 
 - **Para qué:** avisar al cliente, a la agencia de aduana y al transportista que la carga llega, para coordinar el despacho anticipado y el retiro.
 - **Cuándo:** la alerta aparece 72 h antes de la ETA real de Operaciones. Las horas se cambian en Configuración. La ven el Customer y el Operador de la RO. El Admin la ve si queda roja sin atender.
-- **Quién la envía:** solo el Customer de la RO o el Admin, con **"Preparar pre-alerta"** (en la alerta del Inicio o en la pestaña Seguimiento). El Operador la ve, sin el botón.
-- **La pantalla de revisión muestra:**
+- **Quién la envía:** solo el Customer de la RO o el Admin.
+- **El aviso:** un botón destacado **"Pre-alerta de llegada pendiente"**, amarillo (rojo a 24 h o con la ETA vencida). Está arriba de todo en el Inicio y al inicio de "Requiere atención" en la ficha. No se puede marcar como vista ni posponer, así que sigue visible hasta que la pre-alerta se envíe. Si se retiene, cambia a "Pre-alerta retenida" y sigue visible. El Operador la ve como una alerta informativa, sin botón.
+- **La ventana emergente** (se abre con el botón) muestra:
   - el **estado de cobro**: condición de crédito y facturas por cobrar de la RO y del cliente, en USD y PEN;
   - los **destinatarios**: el cliente, más la agencia de aduana y el transportista de las provisiones de la RO (marcados por defecto); los demás proveedores de la RO, opcionales; hasta 3 correos más;
   - los **documentos** a adjuntar: BL, Borrador de BL, Commercial Invoice y Packing List, hasta 10 MB;
@@ -126,6 +128,7 @@ Las alertas son plazos que el sistema detecta solo. Las tareas son lo que depend
 | C · Tarja o ingreso al almacén | Contactos del cliente y Customer |
 | Pre-alerta de llegada (la envía el Customer) | Contactos del cliente; agencia de aduana, transportista y otros correos que elija el Customer (uno por destinatario) |
 | Nota del Customer | Contactos del cliente |
+| Cotización enviada (PDF adjunto) | Correos que elige el Comercial; las respuestas le llegan al Comercial |
 | Cliente por aprobar / cliente revisado | Admin / Comercial que lo registró |
 | Resumen diario de alertas (7:00) | Customer, Operador y seguidores de la RO; Admin si hay escaladas |
 
@@ -143,6 +146,22 @@ Las alertas son plazos que el sistema detecta solo. Las tareas son lo que depend
 - **"Abrir WhatsApp"** abre WhatsApp (web o app) con el mensaje escrito, usando un enlace `wa.me`. El Customer revisa y presiona enviar desde su propio WhatsApp. No usa la API pagada de Meta.
 - Números: un celular peruano de 9 dígitos se completa con 51; los fijos se rechazan; los internacionales se escriben con `+`. El código por defecto se cambia con `FORCEX_WHATSAPP_COUNTRY_CODE`.
 - Cada mensaje abierto queda en el historial interno de la RO (quién, a qué número y los primeros 120 caracteres del texto). El sistema no puede confirmar si el mensaje se envió.
+
+---
+
+## 5b. Cotizaciones
+
+- **Quién:** el Comercial crea y ve solo las suyas; el Admin ve y gestiona todas; el Customer solo consulta; Operaciones no tiene acceso.
+- **Cliente o prospecto:** se escribe el RUC y el sistema lo busca **entre los clientes registrados** (no usa una API externa). Si existe, completa razón social, dirección y contacto, y la cotización queda vinculada a la ficha. Si no existe, los datos se escriben a mano y queda como **prospecto**. Los datos se copian: el PDF no cambia si después se edita la ficha.
+- **Contenido:** servicio y ruta (tipo de carga, incoterm, puertos, mercancía, peso, volumen, contenedores, naviera, tránsito, frecuencia, días libres), líneas de tarifa y condiciones.
+- **Tarifas e IGV:** cada línea tiene concepto, cantidad, precio, moneda (USD o PEN) y la casilla **IGV**. El IGV (18 %, `FORCEX_IGV_RATE`) solo se suma a las líneas afectas: los gastos locales son afectos y el flete internacional es inafecto (al elegir un concepto de flete la casilla se desmarca sola). Los totales se muestran por moneda: subtotal, IGV y total.
+- **Número:** `COT-{año}-{0001}`, correlativo por año.
+- **Estados:** Borrador → Enviada → Aceptada o Rechazada. **Vencida** se calcula: fecha + días de validez ya pasaron y el cliente no respondió. Una cotización aceptada o rechazada no se edita (se puede volver a "enviada" si se marcó por error). El Comercial solo elimina sus borradores; el Admin, cualquiera.
+- **PDF:** logo y datos de la empresa, cliente, servicio, tarifas con IGV, condiciones, cuentas bancarias y firma del Comercial.
+- **Envío por correo:** el PDF va adjunto; se eligen los contactos y se pueden agregar otros correos y un mensaje. Queda en `notification_logs` (evento `cotizacion`).
+- **Envío por WhatsApp (sin costo):** abre el WhatsApp del Comercial con un mensaje y un **enlace firmado al PDF** que se abre sin iniciar sesión y vence a los 30 días (`FORCEX_QUOTATION_LINK_DAYS`).
+- **Configuración:** sección "Datos de la empresa para documentos" (RUC, dirección, teléfono, correo, web, cuentas bancarias) y sección "Cotizaciones" (validez por defecto, 7 días, y condiciones por defecto).
+- **Más adelante:** convertir una cotización aceptada en RO.
 
 ---
 
@@ -193,7 +212,7 @@ Los carga `php artisan db:seed` (o `migrate:fresh --seed` en una base vacía).
 | maria_customer, diego_customer | Customer Service | Demo123456 |
 | carla_operaciones, luis_operaciones | Operaciones | Demo123456 |
 
-Incluyen 15 RO (FX-OT-250001 a 250015), documentos por validar y observados, cambios de fecha pendientes, provisiones, facturas y una alerta de cada tipo y nivel.
+Incluyen 15 RO (FX-OT-250001 a 250015), documentos por validar y observados, cambios de fecha pendientes, provisiones, facturas, una alerta de cada tipo y nivel, y 2 cotizaciones de Juan Comercial (una enviada a Andean Retail y un borrador para un prospecto).
 
 ---
 
@@ -208,6 +227,7 @@ Incluyen 15 RO (FX-OT-250001 a 250015), documentos por validar y observados, cam
 | Pre-alerta de llegada | `app/Services/PreAlertService.php`, `app/Http/Controllers/ShipmentPreAlertController.php`, `app/Models/ShipmentPreAlert.php`, `resources/views/shipments/pre-alert.blade.php` |
 | Tareas del Inicio | `app/Services/ActionInbox.php`, `app/Support/ShipmentAttention.php` |
 | Correos | `app/Services/ShipmentNotifier.php`, `app/Support/MailSubject.php`, `app/Jobs/SendTrackingMail.php`, `resources/views/vendor/mail/` |
+| Cotizaciones | `app/Models/Quotation.php`, `app/Services/QuotationService.php`, `app/Http/Controllers/QuotationController.php`, `app/Policies/QuotationPolicy.php`, `resources/views/quotations/`, `resources/views/pdf/quotation.blade.php` |
 | WhatsApp al cliente | `app/Support/WhatsApp.php`, `app/Http/Controllers/ShipmentWhatsAppController.php`, `resources/views/shipments/tabs/tracking.blade.php` |
 | Cambios de ETD/ETA | `app/Services/ShipmentDateChangeService.php`, `app/Observers/ShipmentObserver.php` |
 | Indicadores y reportes | `app/Services/ManagementMetrics.php`, `app/Support/ReportFilters.php`, `app/Support/Exports/` |

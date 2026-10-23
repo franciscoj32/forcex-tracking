@@ -235,6 +235,112 @@ Alpine.data('formDatePicker', (config = {}) => ({
     },
 }));
 
+// Formulario de cotizacion: busca el RUC entre los clientes, lineas de tarifa y totales con IGV.
+Alpine.data('quotationForm', (config = {}) => ({
+    lookupUrl: config.lookupUrl,
+    igvRate: Number(config.igvRate ?? 0.18),
+    concepts: config.concepts ?? [],
+    customer: Object.assign({ ruc: '', razon_social: '', direccion: '', contacto_nombre: '', contacto_correo: '', contacto_telefono: '' }, config.customer ?? {}),
+    rows: (config.rows ?? []).length ? config.rows : [],
+    lookup: { state: config.linked ? 'found' : '', contacts: [], name: '' },
+    lastRuc: '',
+
+    init() {
+        if (this.rows.length === 0) {
+            this.add();
+        }
+        this.lastRuc = this.customer.ruc;
+    },
+
+    blankRow(currency = 'USD') {
+        return { rate_concept_id: '', descripcion: '', cantidad: '1', precio_unitario: '', moneda: currency, afecto_igv: true };
+    },
+
+    add() {
+        const last = this.rows[this.rows.length - 1];
+        this.rows.push(this.blankRow(last ? last.moneda : 'USD'));
+    },
+
+    remove(index) {
+        this.rows.splice(index, 1);
+        if (this.rows.length === 0) {
+            this.add();
+        }
+    },
+
+    // Al elegir un concepto se usa su nombre. El flete internacional es inafecto a IGV.
+    pickConcept(row) {
+        const concept = this.concepts.find((item) => String(item.id) === String(row.rate_concept_id));
+        if (!concept) {
+            return;
+        }
+        row.descripcion = concept.nombre;
+        row.afecto_igv = !/flete/i.test(concept.nombre);
+    },
+
+    async findRuc() {
+        const ruc = (this.customer.ruc || '').replace(/\D+/g, '');
+        this.customer.ruc = ruc;
+        if (ruc.length !== 11) {
+            this.lookup.state = ruc.length ? 'invalid' : '';
+            return;
+        }
+        if (ruc === this.lastRuc && this.lookup.state !== '' && this.lookup.state !== 'invalid') {
+            return;
+        }
+        this.lastRuc = ruc;
+        this.lookup.state = 'loading';
+        try {
+            const response = await fetch(`${this.lookupUrl}?ruc=${ruc}`, { headers: { Accept: 'application/json' } });
+            const data = await response.json();
+            if (!data.found) {
+                this.lookup = { state: 'missing', contacts: [], name: '' };
+                return;
+            }
+            const client = data.client;
+            this.lookup = { state: 'found', contacts: client.contacts, name: client.razon_social };
+            this.customer.razon_social = client.razon_social;
+            this.customer.direccion = client.direccion || '';
+            const main = client.contacts[0];
+            this.customer.contacto_nombre = main ? main.nombre : '';
+            this.customer.contacto_correo = main ? main.correo || '' : client.correo || '';
+            this.customer.contacto_telefono = main ? main.telefono || '' : client.telefono || '';
+        } catch (error) {
+            this.lookup = { state: 'error', contacts: [], name: '' };
+        }
+    },
+
+    pickContact(event) {
+        const contact = this.lookup.contacts[event.target.value];
+        if (!contact) {
+            return;
+        }
+        this.customer.contacto_nombre = contact.nombre;
+        this.customer.contacto_correo = contact.correo || '';
+        this.customer.contacto_telefono = contact.telefono || '';
+    },
+
+    lineTotal(row) {
+        return (parseFloat(row.cantidad) || 0) * (parseFloat(row.precio_unitario) || 0);
+    },
+
+    currencies() {
+        return ['USD', 'PEN'].filter((currency) => this.rows.some((row) => row.moneda === currency));
+    },
+
+    totals(currency) {
+        const rows = this.rows.filter((row) => row.moneda === currency);
+        const subtotal = rows.reduce((sum, row) => sum + this.lineTotal(row), 0);
+        const igv = rows.filter((row) => row.afecto_igv).reduce((sum, row) => sum + this.lineTotal(row) * this.igvRate, 0);
+        return { subtotal, igv, total: subtotal + igv };
+    },
+
+    money(amount, currency) {
+        const symbol = currency === 'PEN' ? 'S/' : 'US$';
+        return `${symbol} ${amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    },
+}));
+
 Alpine.start();
 
 const disableNativeAutocomplete = () => {

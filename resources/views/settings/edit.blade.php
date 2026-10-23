@@ -41,6 +41,61 @@
             </div>
         </section>
 
+        <section class="fx-card">
+            <div class="fx-card-header">
+                <h2 class="fx-section-title">Datos de la empresa para documentos</h2>
+                <span class="text-xs text-slate-500">Se imprimen en el PDF de las cotizaciones</span>
+            </div>
+            <div class="fx-card-body grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="fx-label" for="empresa_ruc">RUC</label>
+                    <input class="fx-input tabular-nums" id="empresa_ruc" name="empresa_ruc" inputmode="numeric" maxlength="11" pattern="\d{11}" value="{{ old('empresa_ruc', $settings->empresa_ruc) }}">
+                </div>
+                <div>
+                    <label class="fx-label" for="empresa_telefono">Teléfono</label>
+                    <input class="fx-input" id="empresa_telefono" name="empresa_telefono" maxlength="60" value="{{ old('empresa_telefono', $settings->empresa_telefono) }}">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="fx-label" for="empresa_direccion">Dirección</label>
+                    <input class="fx-input" id="empresa_direccion" name="empresa_direccion" value="{{ old('empresa_direccion', $settings->empresa_direccion) }}">
+                </div>
+                <div>
+                    <label class="fx-label" for="empresa_correo">Correo</label>
+                    <input class="fx-input" id="empresa_correo" name="empresa_correo" type="email" value="{{ old('empresa_correo', $settings->empresa_correo) }}">
+                </div>
+                <div>
+                    <label class="fx-label" for="empresa_web">Página web</label>
+                    <input class="fx-input" id="empresa_web" name="empresa_web" placeholder="www.empresa.com" value="{{ old('empresa_web', $settings->empresa_web) }}">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="fx-label" for="cuentas_bancarias">Cuentas bancarias (una por línea)</label>
+                    <textarea class="fx-textarea" id="cuentas_bancarias" name="cuentas_bancarias" rows="4" maxlength="2000"
+                        placeholder="BCP Dólares: 193-1234567-1-00 · CCI 002-193-001234567100-10&#10;BCP Soles: 193-7654321-0-11 · CCI 002-193-007654321011-15">{{ old('cuentas_bancarias', $settings->cuentas_bancarias) }}</textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="fx-card">
+            <div class="fx-card-header">
+                <h2 class="fx-section-title">Cotizaciones</h2>
+                <span class="text-xs text-slate-500">Valores con los que empieza cada cotización nueva</span>
+            </div>
+            <div class="fx-card-body space-y-4">
+                <div>
+                    <label class="fx-label" for="cotizacion_validez_dias">Validez</label>
+                    <div class="mt-1 flex items-center gap-2">
+                        <input class="fx-input mt-0 w-24" id="cotizacion_validez_dias" name="cotizacion_validez_dias" type="number" min="1" max="180" step="1"
+                            value="{{ old('cotizacion_validez_dias', $settings->cotizacion_validez_dias ?? 7) }}" required>
+                        <span class="text-sm text-slate-500">días calendario</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="fx-label" for="cotizacion_condiciones">Condiciones (el Comercial puede ajustarlas en cada cotización)</label>
+                    <textarea class="fx-textarea" id="cotizacion_condiciones" name="cotizacion_condiciones" rows="8" maxlength="5000">{{ old('cotizacion_condiciones', $settings->cotizacion_condiciones) }}</textarea>
+                </div>
+            </div>
+        </section>
+
         <section class="fx-card" x-data="{ primary: @js(old('color_primario', $settings->color_primario)), accent: @js(old('color_acento', $settings->color_acento)) }">
             <div class="fx-card-header">
                 <h2 class="fx-section-title">Colores de marca</h2>

@@ -13,6 +13,7 @@
                     ['label' => 'Inicio', 'route' => 'dashboard', 'active' => ['dashboard'], 'icon' => 'home', 'can' => true],
                     ['label' => 'Embarques', 'route' => 'embarques.index', 'active' => ['embarques.*'], 'icon' => 'shipments', 'can' => true],
                     ['label' => 'Clientes', 'route' => 'clientes.index', 'active' => ['clientes.*'], 'icon' => 'clients', 'can' => $user->can('viewAny', \App\Models\Client::class)],
+                    ['label' => 'Cotizaciones', 'route' => 'cotizaciones.index', 'active' => ['cotizaciones.*'], 'icon' => 'quotation', 'can' => $user->can('viewAny', \App\Models\Quotation::class)],
                 ]],
                 ['title' => 'Finanzas', 'items' => [
                     ['label' => 'Provisiones', 'route' => 'provisiones.index', 'active' => ['provisiones.*'], 'icon' => 'provisions', 'can' => $user->can('view-provisions')],

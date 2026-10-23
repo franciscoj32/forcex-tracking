@@ -8,45 +8,49 @@ use App\Services\PreAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\MessageBag;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
- * Pre-alerta de llegada. El sistema la pide 72 h antes de la ETA (alerta del
- * Inicio) y el Customer decide: la envia a los externos (cliente, agencia de
- * aduana, transportista) o la retiene, por ejemplo hasta que el cliente pague.
+ * Pre-alerta de llegada. El sistema la pide 72 h antes de la ETA y el Customer
+ * decide: la envia a los externos (cliente, agencia de aduana, transportista) o
+ * la retiene, por ejemplo hasta que el cliente pague.
+ *
+ * Se trabaja en una ventana emergente: en la ficha (ya cargada en la pagina) y
+ * en el Inicio (se pide con ?modal=1 al hacer clic). La pagina completa queda
+ * para enlaces directos y para mostrar errores cuando se envio desde el Inicio.
+ *
+ * "volver" indica de donde vino: inicio, ficha o pagina.
  */
 class ShipmentPreAlertController extends Controller
 {
+    private const ORIGINS = ['inicio', 'ficha', 'pagina'];
+
     public function __construct(private readonly PreAlertService $preAlerts) {}
 
-    public function create(Shipment $shipment): View
+    public function create(Request $request, Shipment $shipment): View
     {
         Gate::authorize('sendPreAlert', $shipment);
 
-        $shipment->load(['client', 'customerService:id,name,email', 'containers']);
-        $suppliers = $this->preAlerts->supplierOptions($shipment);
+        $data = $this->preAlerts->formData($shipment);
 
-        return view('shipments.pre-alert', [
-            'shipment' => $shipment,
-            'blockReason' => $this->preAlerts->blockReason($shipment),
-            'pendingEtaChange' => $this->preAlerts->pendingEtaChange($shipment),
-            'clientEmails' => $shipment->clientRecipientEmails(),
-            'suppliers' => $suppliers,
-            'missingSuppliers' => $this->preAlerts->missingKeySuppliers($suppliers),
-            'documents' => $this->preAlerts->documentOptions($shipment),
-            'credit' => $this->preAlerts->creditSummary($shipment),
-            'history' => $shipment->preAlerts()->with('user:id,name')->limit(10)->get(),
-            'maxAttachmentMb' => intdiv(ShipmentPreAlert::MAX_ATTACHMENT_BYTES, 1024 * 1024),
-        ]);
+        // Contenido de la ventana emergente del Inicio (sin el menu ni la cabecera).
+        if ($request->boolean('modal')) {
+            return view('shipments.partials.pre-alert-form', $data + ['volver' => $this->origin($request, 'inicio')]);
+        }
+
+        return view('shipments.pre-alert', $data + ['volver' => 'pagina']);
     }
 
     public function store(Request $request, Shipment $shipment): RedirectResponse
     {
         Gate::authorize('sendPreAlert', $shipment);
+        $origin = $this->origin($request);
 
         if ($reason = $this->preAlerts->blockReason($shipment)) {
-            return back()->withErrors(['pre_alerta' => $reason]);
+            return $this->failed($shipment, $origin, ['pre_alerta' => $reason]);
         }
 
         $supplierIds = $this->preAlerts->supplierOptions($shipment)
@@ -55,7 +59,7 @@ class ShipmentPreAlertController extends Controller
             ->all();
         $documentIds = $this->preAlerts->documentOptions($shipment)->map(fn (array $option) => $option['document']->id)->all();
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'enviar_cliente' => ['nullable', 'boolean'],
             'supplier_ids' => ['nullable', 'array'],
             'supplier_ids.*' => ['integer', Rule::in($supplierIds)],
@@ -69,6 +73,11 @@ class ShipmentPreAlertController extends Controller
             'correos_extra.*.email' => 'El correo ":input" no es válido.',
         ], ['nota' => 'nota']);
 
+        if ($validator->fails()) {
+            return $this->failed($shipment, $origin, $validator->errors());
+        }
+
+        $data = $validator->validated();
         $data = [
             'enviar_cliente' => $request->boolean('enviar_cliente'),
             'supplier_ids' => array_map('intval', $data['supplier_ids'] ?? []),
@@ -80,38 +89,68 @@ class ShipmentPreAlertController extends Controller
         $hasClient = $data['enviar_cliente'] && $shipment->clientRecipientEmails() !== [];
 
         if (! $hasClient && $data['supplier_ids'] === [] && $data['correos_extra'] === []) {
-            return back()->withInput()->withErrors(['destinatarios' => 'Elige al menos un destinatario.']);
+            return $this->failed($shipment, $origin, ['destinatarios' => 'Elige al menos un destinatario.']);
         }
 
         $documents = $shipment->documents()->whereIn('id', $data['document_ids'])->get();
 
         if ($this->preAlerts->attachmentsSize($documents) > ShipmentPreAlert::MAX_ATTACHMENT_BYTES) {
-            return back()->withInput()->withErrors([
+            return $this->failed($shipment, $origin, [
                 'document_ids' => 'Los adjuntos superan '.intdiv(ShipmentPreAlert::MAX_ATTACHMENT_BYTES, 1024 * 1024).' MB. Quita alguno para que el correo no rebote.',
             ]);
         }
 
         $preAlert = $this->preAlerts->send($shipment, $request->user(), $data);
 
-        return redirect()
-            ->route('embarques.show', ['shipment' => $shipment, 'tab' => 'tracking'])
-            ->with('status', 'Pre-alerta enviada a '.$preAlert->recipientsSummary().'.');
+        return $this->done($shipment, $origin, "Pre-alerta de {$shipment->routing_order} enviada a ".$preAlert->recipientsSummary().'.');
     }
 
     public function hold(Request $request, Shipment $shipment): RedirectResponse
     {
         Gate::authorize('sendPreAlert', $shipment);
+        $origin = $this->origin($request);
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'motivo_retencion' => ['required', 'string', 'max:500'],
         ], [
             'motivo_retencion.required' => 'Escribe por qué la retienes (por ejemplo, facturas pendientes de pago).',
         ]);
 
-        $this->preAlerts->hold($shipment, $request->user(), trim($data['motivo_retencion']));
+        if ($validator->fails()) {
+            return $this->failed($shipment, $origin, $validator->errors());
+        }
 
-        return redirect()
-            ->route('embarques.pre-alerta', $shipment)
-            ->with('status', 'Pre-alerta retenida. Sigue en tus alertas hasta que la envíes.');
+        $this->preAlerts->hold($shipment, $request->user(), trim($validator->validated()['motivo_retencion']));
+
+        return $this->done($shipment, $origin, "Pre-alerta de {$shipment->routing_order} retenida. Sigue visible hasta que la envíes.");
+    }
+
+    private function origin(Request $request, string $default = 'pagina'): string
+    {
+        $origin = $request->input('volver', $default);
+
+        return in_array($origin, self::ORIGINS, true) ? $origin : $default;
+    }
+
+    /**
+     * Con errores: la ficha vuelve a abrir su ventana con lo escrito; desde el
+     * Inicio (ventana cargada aparte) se muestra la pagina completa con los errores.
+     */
+    private function failed(Shipment $shipment, string $origin, MessageBag|array $errors): RedirectResponse
+    {
+        $redirect = $origin === 'ficha'
+            ? redirect()->route('embarques.show', $shipment)
+            : redirect()->route('embarques.pre-alerta', $shipment);
+
+        return $redirect->withErrors($errors)->withInput();
+    }
+
+    private function done(Shipment $shipment, string $origin, string $message): RedirectResponse
+    {
+        $redirect = $origin === 'inicio'
+            ? redirect()->route('dashboard')
+            : redirect()->route('embarques.show', $shipment);
+
+        return $redirect->with('status', $message);
     }
 }

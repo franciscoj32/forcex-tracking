@@ -1,6 +1,6 @@
 {
   "resources/css/app.css": {
-    "file": "assets/app-AcQeFXrg.css",
+    "file": "assets/app-vFgSqUyV.css",
     "src": "resources/css/app.css",
     "isEntry": true
   },
@@ -13,7 +13,7 @@
     "src": "resources/fonts/ibm-plex-sans-latin-wght-normal.woff2"
   },
   "resources/js/app.js": {
-    "file": "assets/app-DQy_3rwk.js",
+    "file": "assets/app-DXkTvldV.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true

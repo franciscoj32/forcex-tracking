@@ -22,6 +22,53 @@
     </x-slot>
 
     <div class="space-y-4">
+        {{-- Pre-alertas de llegada pendientes: arriba de todo, hasta que se envien o se retengan.
+             Cada aviso abre una ventana que carga el formulario de esa RO. --}}
+        @if ($preAlerts->isNotEmpty())
+            <section class="space-y-2" aria-label="Pre-alertas de llegada pendientes">
+                @foreach ($preAlerts as $preAlert)
+                    @include('alerts.pre-alert-trigger', ['alert' => $preAlert, 'opens' => 'remote', 'withShipment' => true])
+                @endforeach
+            </section>
+
+            <div x-data="{
+                    open: false, loading: false, failed: false, html: '', title: '',
+                    async load(url, title) {
+                        this.title = title; this.html = ''; this.failed = false; this.loading = true; this.open = true;
+                        try {
+                            const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' } });
+                            if (! response.ok) throw new Error(response.status);
+                            this.html = await response.text();
+                        } catch (e) {
+                            this.failed = true;
+                        } finally {
+                            this.loading = false;
+                        }
+                    },
+                 }"
+                 x-on:open-pre-alert.window="load($event.detail.url, $event.detail.title)"
+                 x-on:keydown.escape.window="open = false">
+                <template x-teleport="body">
+                    <div x-show="open" x-cloak class="fixed inset-0 z-50 overflow-y-auto">
+                        <div class="fixed inset-0 bg-slate-900/40" x-on:click="open = false"></div>
+                        <div class="relative flex items-end justify-center sm:items-center sm:p-4" style="min-height: 100%" x-on:click.self="open = false">
+                            <section class="relative w-full max-w-5xl rounded-t-md bg-white shadow-lg sm:rounded-md" role="dialog" aria-modal="true" :aria-label="title">
+                                <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+                                    <h3 class="fx-section-title" x-text="title"></h3>
+                                    <button type="button" x-on:click="open = false" class="rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Cerrar">
+                                        <x-nav-icon name="close" class="h-5 w-5" />
+                                    </button>
+                                </div>
+                                <p x-show="loading" class="px-5 py-8 text-center text-slate-500">Cargando…</p>
+                                <p x-show="failed" class="px-5 py-8 text-center text-rose-700">No se pudo cargar la pre-alerta. Vuelve a intentarlo.</p>
+                                <div x-html="html"></div>
+                            </section>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        @endif
+
         {{-- Numeros del mes (Admin y Comercial) --}}
         @if ($month)
             @php

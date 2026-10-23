@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>FORCEX Tracking - Manual del Gerente</title>
+<style>
+    @page { margin: 22mm 18mm 20mm 18mm; }
+    * { font-family: DejaVu Sans, sans-serif; }
+    body { font-size: 10px; color: #0f172a; line-height: 1.45; }
+    h1 { font-size: 20px; color: #10235f; margin: 0 0 4px; }
+    h2 { font-size: 14px; color: #10235f; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 2px solid #1e40af; }
+    h3 { font-size: 11.5px; color: #1e40af; margin: 12px 0 4px; }
+    p { margin: 0 0 6px; }
+    ul, ol { margin: 0 0 6px 0; padding-left: 16px; }
+    li { margin-bottom: 2px; }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+    th { background: #e0e4f4; color: #10235f; text-align: left; padding: 5px; font-size: 9.5px; border: 1px solid #c0cae9; }
+    td { padding: 5px; border: 1px solid #cbd5e1; vertical-align: top; }
+    .muted { color: #64748b; }
+    .cover { border-left: 5px solid #16a34a; padding: 8px 12px; background: #f1f5f9; margin-bottom: 10px; }
+    .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 7px 10px; margin: 6px 0 8px; }
+    .warn { border: 1px solid #fcd34d; background: #fffbeb; padding: 7px 10px; margin: 6px 0 8px; }
+    .tag { display: inline-block; background: #1e40af; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 9px; }
+    .page { page-break-before: always; }
+    .small { font-size: 9px; }
+    code { font-family: DejaVu Sans Mono, monospace; font-size: 9px; background: #f1f5f9; padding: 0 2px; }
+</style>
+</head>
+<body>
+
+<h1>FORCEX Tracking</h1>
+<p class="muted">Manual del Administrador / Gerente · Octubre 2026</p>
+
+<div class="cover">
+    <p><strong>Tu rol.</strong> Eres el único usuario que ve y puede hacer todo: aprobar clientes, ver el margen de la empresa, crear usuarios, configurar el sistema y corregir cualquier dato. Además respaldas a los demás roles: puedes hacer lo de un Comercial, un Customer o un Operador cuando haga falta.</p>
+    <p>Para entrar: usuario <strong>admin</strong> (o el correo admin@forcexlogistics.com.pe). La contraseña inicial es <strong>cambiar123</strong>; cámbiala el primer día en <em>Mi perfil</em>.</p>
+</div>
+
+<h2>1. Menú</h2>
+<table>
+    <tr><th style="width:24%">Sección</th><th>Qué hay</th></tr>
+    <tr><td>Inicio</td><td>Números del mes de toda la empresa, ranking de comerciales, tendencia de margen, tareas para ti y alertas escaladas.</td></tr>
+    <tr><td>Embarques</td><td>Todas las RO, con las vistas Activos, Retrasados, Arriban en 7 días, Fecha por validar, Finalizados y Todos. Búsqueda, filtros, exportación a Excel y actualización masiva por nave.</td></tr>
+    <tr><td>Clientes</td><td>Altas, aprobación, crédito y contactos.</td></tr>
+    <tr><td>Cotizaciones</td><td>Las cotizaciones de todos los comerciales (filtro por comercial), con las vistas Borradores, Enviadas, Aceptadas, Rechazadas y Vencidas.</td></tr>
+    <tr><td>Finanzas</td><td>Provisiones (costos), Facturación, Proveedores y Conceptos de tarifa.</td></tr>
+    <tr><td>Reportes</td><td>Indicadores con filtros, ranking y exportables (Excel y PDF gerencial).</td></tr>
+    <tr><td>Administración</td><td>Usuarios, Roles (matriz de permisos) y Configuración.</td></tr>
+</table>
+
+<h2>2. Inicio gerencial</h2>
+<h3>Números del mes</h3>
+<p>Arriba hay un selector de mes (los últimos 12). Para cada mes ves:</p>
+<ul>
+    <li><strong>Embarques del mes</strong>, separados en FCL, LCL y aéreo. Un embarque cuenta en el mes de su ETD; si aún no tiene ETD, en el mes de su registro.</li>
+    <li><strong>Venta, costo y margen en USD</strong>, y el margen como % de la venta. Los montos en soles se convierten con el tipo de cambio que quedó fijo en cada RO.</li>
+    <li><strong>Retrasados hoy:</strong> RO con la ETA vencida que todavía no arribaron.</li>
+    <li><strong>Ranking de comerciales por margen:</strong> cuántas RO tiene cada uno, su venta, su margen y su %.</li>
+    <li><strong>Tendencia de los últimos 6 meses:</strong> embarques y margen por mes.</li>
+</ul>
+<p class="small muted">Un Comercial ve solo sus propios números y su puesto en el ranking. Nadie más ve el margen de la empresa.</p>
+
+<h3>Requiere tu acción</h3>
+<ul>
+    <li><strong>Clientes nuevos por aprobar</strong>, con quién los registró y cuándo.</li>
+    <li><strong>Cambios de ETD/ETA sin validar</strong> en todas las RO. Los validas tú si el Customer no está o la RO no tiene Customer.</li>
+    <li><strong>RO sin operador asignado.</strong></li>
+</ul>
+
+<h3>Alertas escaladas</h3>
+<p>No ves todas las alertas, para no saturarte. Solo ves las <strong>rojas que nadie atendió en 4 horas</strong> (el tiempo se cambia en Configuración), con la etiqueta "Sin atender hace X h". Desde ahí puedes marcarlas como vistas, posponerlas o abrir la RO.</p>
+
+<h2>3. Clientes</h2>
+<ul>
+    <li><strong>Aprobar un cliente</strong> que registró un Comercial: revisas el RUC, los datos fiscales y el crédito propuesto (contado, o crédito a 7, 15, 30, 45, 60 o 90 días y la línea de crédito). Para aprobar, el cliente debe tener al menos un contacto. El Comercial recibe un correo.</li>
+    <li><strong>Rechazar</strong> con un motivo. El Comercial recibe el motivo, corrige y el cliente vuelve a "Por aprobar". No se puede rechazar un cliente que ya tiene RO.</li>
+    <li><strong>Un cliente que creas tú</strong> queda aprobado de inmediato.</li>
+    <li><strong>Editar</strong> cualquier cliente y sus contactos. Marca qué contactos <strong>reciben los avisos de la carga</strong>: solo a ellos les llegan los correos.</li>
+    <li><strong>Eliminar</strong> un cliente solo si no tiene RO ni usuarios.</li>
+    <li><strong>Solo con clientes aprobados y activos</strong> se pueden emitir RO.</li>
+</ul>
+
+<h3>Cotizaciones</h3>
+<ul>
+    <li>Cada Comercial ve solo las suyas; tú ves todas y puedes filtrarlas por comercial. El Customer solo las consulta.</li>
+    <li>Se cotiza a un cliente registrado (el sistema lo encuentra por su RUC) o a un <strong>prospecto</strong> que aún no es cliente.</li>
+    <li>El IGV (18 %) solo se suma a las líneas marcadas como afectas: los gastos locales. El flete internacional es inafecto.</li>
+    <li>Se envían por correo con el PDF adjunto o por WhatsApp con un enlace al PDF que dura 30 días. La cotización queda "Vencida" cuando pasa su validez sin respuesta.</li>
+    <li>Puedes editar cualquier cotización que no esté aceptada o rechazada, y eliminar cualquiera.</li>
+</ul>
+
+<h2>4. Embarques (RO)</h2>
+<h3>Lo que solo tú puedes hacer</h3>
+<ul>
+    <li><strong>Editar cualquier campo</strong> de una RO en cualquier etapa (los datos comerciales después de la creación, los operativos, el estado, etc.).</li>
+    <li><strong>Reasignar el Comercial</strong> de una RO (afecta el ranking).</li>
+    <li><strong>Forzar la condición de crédito</strong> de una RO (por ejemplo, pasar una RO de alto valor a contado aunque el cliente tenga crédito).</li>
+    <li><strong>Ajustar el tipo de cambio</strong> de una RO. Cada RO copia el tipo de cambio de referencia al crearse y lo deja fijo.</li>
+    <li><strong>Eliminar una RO.</strong> También borra sus documentos y facturas. No se puede deshacer.</li>
+</ul>
+<h3>Lo que puedes hacer como respaldo de los demás roles</h3>
+<ul>
+    <li><strong>Lo de Comercial:</strong> crear RO con sus tarifas de venta.</li>
+    <li><strong>Lo de Customer:</strong> validar o descartar cambios de fecha (también en grupo), escribir notas al cliente, enviar WhatsApp, validar u observar documentos, y enviar o retener la pre-alerta.</li>
+    <li><strong>Lo de Operaciones:</strong> datos operativos, contenedores, cut-off cumplido, hitos, tarja y actualización masiva por nave/viaje.</li>
+</ul>
+<h3>La ficha de una RO</h3>
+<ul>
+    <li><strong>Encabezado:</strong> el código de seguimiento del cliente (con botón para copiarlo) y el bloque <em>"Requiere atención"</em>, con las tareas y las cuentas regresivas de esa RO.</li>
+    <li><strong>Pestañas:</strong>
+        <ul>
+            <li>Resumen;</li>
+            <li>Seguimiento: recorrido, notas al cliente, correos enviados, historial, WhatsApp y pre-alerta;</li>
+            <li>Documentos: lista de obligatorios y validación;</li>
+            <li>Finanzas: tarifas de venta, costos, facturas y margen.</li>
+        </ul>
+    </li>
+    <li><strong>PDF del estado de la carga</strong>, para enviárselo al cliente. Solo trae información que el cliente puede ver.</li>
+    <li><strong>Historial de cambios:</strong> cada cambio queda registrado con quién lo hizo y cuándo.</li>
+</ul>
+
+<h2 class="page">5. Finanzas</h2>
+<table>
+    <tr><th style="width:22%">Módulo</th><th>Qué es</th><th style="width:28%">Quién lo usa</th></tr>
+    <tr><td>Tarifas de venta</td><td>Lo que se cobra al cliente por concepto (flete, THC, aduana...), en USD o PEN. Se cargan al crear la RO.</td><td>Comercial y Admin. El Customer las ve; Operaciones no.</td></tr>
+    <tr><td>Provisiones</td><td>Costos de proveedores por RO, con su estado (por pagar o pagado). Se ven agrupadas por proveedor, por RO o sin agrupar.</td><td>Las registra Operaciones; el Customer las consulta.</td></tr>
+    <tr><td>Facturación</td><td>Facturas al cliente: número, monto, moneda, estado (pendiente, emitida, pagada) y PDF. Se ven agrupadas por cliente, por RO o sin agrupar.</td><td>Las registra Operaciones; los demás las consultan.</td></tr>
+    <tr><td>Proveedores</td><td>Navieras, aerolíneas, agentes, almacenes, transportistas y agencias de aduana, con su correo. La pre-alerta llega a ese correo.</td><td>Operaciones y Admin.</td></tr>
+    <tr><td>Conceptos de tarifa</td><td>El catálogo de conceptos de cobro y costo.</td><td>Solo Admin.</td></tr>
+</table>
+<ul>
+    <li><strong>Margen (USD)</strong> = tarifas de venta − costos de proveedores. Los montos en PEN se convierten con el tipo de cambio fijo de cada RO.</li>
+    <li><strong>RO "incompletas":</strong> si una RO tiene montos en PEN y no tiene tipo de cambio, no se suma y aparece como "incompleta".</li>
+    <li><strong>Eliminar provisiones y facturas</strong> lo puede hacer solo el Administrador.</li>
+</ul>
+
+<h2>6. Reportes</h2>
+<ul>
+    <li><strong>Filtros:</strong> rango de fechas, cliente, tipo de carga y (solo tú) comercial.</li>
+    <li><strong>Pantalla:</strong> embarques por mes, embarques por estado, clientes con más embarques y el <strong>ranking de comerciales</strong> del rango (solo tú ves los montos).</li>
+    <li><strong>Exportar:</strong>
+        <ul>
+            <li>Excel de operaciones;</li>
+            <li><strong>Excel financiero</strong> de todas las RO, con una hoja de ranking (el Comercial solo puede bajar el de sus RO);</li>
+            <li><strong>PDF gerencial</strong> del mes.</li>
+        </ul>
+    </li>
+    <li><strong>Mismos filtros en todo:</strong> lo que ves en pantalla es exactamente lo que se descarga.</li>
+</ul>
+
+<h2>7. Usuarios y roles</h2>
+<ul>
+    <li><strong>Crear un usuario:</strong> nombre, usuario (para entrar), correo, rol (Administrador, Comercial, Customer Service u Operaciones), estado y contraseña (mínimo 8 caracteres). <strong>No hay registro público</strong>: solo tú creas usuarios.</li>
+    <li><strong>Cambiar la contraseña</strong> de un usuario: edítalo y escribe una nueva. Si dejas el campo vacío, se mantiene la actual.</li>
+    <li><strong>Desactivar</strong> (estado "inactivo"): el usuario ya no puede entrar, pero su historial queda. Es lo recomendado cuando alguien deja la empresa.</li>
+    <li><strong>Eliminar</strong> un usuario: su historial de hitos y documentos se conserva. No puedes eliminarte a ti mismo.</li>
+    <li><strong>Roles:</strong> muestra la matriz de qué puede hacer cada rol. El detalle de cada rol está en el "Manual por rol".</li>
+</ul>
+
+<h2>8. Configuración</h2>
+<table>
+    <tr><th style="width:28%">Bloque</th><th>Qué se define</th></tr>
+    <tr><td>Empresa</td><td>Nombre de la empresa, nombre del sistema (pestaña del navegador), sigla y <strong>logo</strong>. El logo sale en el menú, el login, los correos y los PDF. Si es redondo o cuadrado, el sistema lo muestra más grande automáticamente.</td></tr>
+    <tr><td>Colores de marca</td><td>Color principal (menú y botones) y de acento (avance y confirmaciones). Cambian en todo el sistema, los correos y los PDF.</td></tr>
+    <tr><td>Datos de la empresa para documentos</td><td>RUC, dirección, teléfono, correo, página web y <strong>cuentas bancarias</strong> (una por línea). Se imprimen en el PDF de las cotizaciones.</td></tr>
+    <tr><td>Cotizaciones</td><td>Validez por defecto (<strong>7 días</strong>) y el texto de las condiciones con el que empieza cada cotización. El Comercial puede ajustarlo en cada una.</td></tr>
+    <tr><td>Tipo de cambio de referencia</td><td>Soles por dólar. Cada RO nueva lo copia y lo deja fijo. Actualízalo cuando cambie.</td></tr>
+    <tr><td>Alertas críticas</td><td>
+        <ul>
+            <li>Verde desde <strong>5 días</strong>, amarilla desde <strong>48 h</strong>, roja desde <strong>24 h</strong> antes del plazo.</li>
+            <li>Avisar al Administrador si una roja no se atiende en <strong>4 h</strong>.</li>
+            <li>ETA crítica si se retrasa <strong>2 días</strong> o más frente a la original.</li>
+            <li>Pre-alerta de llegada <strong>72 h</strong> antes de la ETA.</li>
+        </ul>
+    </td></tr>
+</table>
+
+<h2 class="page">9. Alertas críticas</h2>
+<p>El sistema detecta solo los plazos en riesgo y los muestra en el Inicio de quien debe actuar. Una alerta se cierra sola cuando se registra el dato que la resuelve.</p>
+<table>
+    <tr><th style="width:20%">Alerta</th><th>Cuándo aparece</th><th style="width:32%">Se cierra cuando</th></tr>
+    <tr><td>Cut-off</td><td>Antes del zarpe, según la fecha de cut-off</td><td>Se marca "cut-off cumplido" o se registra el ATD</td></tr>
+    <tr><td>ETA vencida</td><td>Pasó la ETA y la carga no arribó</td><td>Se registra el arribo</td></tr>
+    <tr><td>ETA retrasada</td><td>La ETA quedó 2 días o más después de la original</td><td>La carga arriba</td></tr>
+    <tr><td>Demurrage (FCL)</td><td>Desde la descarga (ese día es el día 1), con los días libres</td><td>Se retiran todos los contenedores</td></tr>
+    <tr><td>Detention (FCL)</td><td>Desde el retiro de cada contenedor</td><td>Se devuelven todos vacíos</td></tr>
+    <tr><td>Almacenaje</td><td>Desde el ingreso al almacén (día 1)</td><td>Se registra el retiro del almacén</td></tr>
+    <tr><td>Pre-alerta de llegada</td><td>72 h antes de la ETA</td><td>El Customer la envía, o se registra el arribo</td></tr>
+</table>
+<ul>
+    <li><strong>Quién las ve:</strong>
+        <ul>
+            <li>el Customer y el Operador de la RO, y quienes la siguen con alertas;</li>
+            <li>el Comercial, solo la ETA vencida o retrasada de sus RO;</li>
+            <li>tú, solo las escaladas.</li>
+        </ul>
+    </li>
+    <li><strong>Vista y Posponer:</strong> si la alerta sube de nivel o cambia el plazo, vuelve a aparecer.</li>
+    <li><strong>Correo diario a las 7:00</strong> con las alertas activas de cada persona. A ti te llegan las escaladas y las de RO sin responsable.</li>
+</ul>
+
+<h2>10. Correos automáticos</h2>
+<table>
+    <tr><th style="width:36%">Evento</th><th>Para quién</th></tr>
+    <tr><td>RO registrada</td><td>Customer asignado y contactos del cliente (con el código de seguimiento)</td></tr>
+    <tr><td>Cambio de ETD/ETA por validar</td><td>Customer asignado (a ti, si la RO no tiene Customer). Si viene de una actualización masiva, llega un solo correo resumido.</td></tr>
+    <tr><td>Fecha confirmada o reprogramada</td><td>Contactos del cliente</td></tr>
+    <tr><td>Pre-alerta de llegada</td><td>Cliente, agencia de aduana, transportista y otros correos que elija el Customer</td></tr>
+    <tr><td>Tarja o ingreso al almacén</td><td>Contactos del cliente y Customer</td></tr>
+    <tr><td>Nota del Customer</td><td>Contactos del cliente</td></tr>
+    <tr><td>Cotización (PDF adjunto)</td><td>Correos que elige el Comercial; las respuestas le llegan al Comercial</td></tr>
+    <tr><td>Cliente por aprobar / cliente revisado</td><td>Tú / el Comercial que lo registró</td></tr>
+    <tr><td>Resumen diario de alertas</td><td>Customer, Operador y seguidores; tú, las escaladas</td></tr>
+</table>
+<ul>
+    <li><strong>Formato:</strong> los correos de una misma RO quedan en un solo hilo, y el asunto empieza siempre con la RO.</li>
+    <li><strong>Respuestas:</strong> si el cliente responde, le llega a su Customer.</li>
+    <li><strong>Registro:</strong> cada envío queda en "Correos enviados", dentro de la ficha (enviado, en cola o fallido).</li>
+</ul>
+
+<h2>11. Mantenimiento del sistema</h2>
+<h3>Tareas que deben estar activas en el hosting</h3>
+<ul>
+    <li><strong>Cron cada minuto</strong> (cPanel → Trabajos de cron): <code>cd /home/penguin2/tracking-forcex-app &amp;&amp; php artisan schedule:run</code>. Sin esto no salen los correos ni el resumen diario.</li>
+    <li><strong>Cuenta de correo</strong> configurada en el archivo <code>.env</code> del hosting. Mientras diga <code>MAIL_MAILER=log</code>, los correos no salen.</li>
+</ul>
+<h3>Publicar una actualización</h3>
+<ol>
+    <li>En la PC: <code>npm run build</code>, <code>git add -A</code>, <code>git commit</code> y <code>git push</code>.</li>
+    <li>En el hosting: <code>cd /home/penguin2/repos/forcex-tracking</code>, <code>git pull origin main</code> y <code>bash deploy.sh</code>.</li>
+</ol>
+<p>El script pone el sitio en mantenimiento unos segundos, actualiza, crea las tablas nuevas y lo vuelve a abrir. No toca los datos ni los documentos subidos.</p>
+<h3>Respaldos</h3>
+<ul>
+    <li><strong>Base de datos:</strong> cPanel → phpMyAdmin → Exportar. Hazlo antes de cada actualización grande.</li>
+    <li><strong>Documentos subidos:</strong> están en <code>tracking-forcex-app/storage/app</code>. Inclúyelos en el respaldo de cPanel.</li>
+</ul>
+<h3>Si aparece un aviso de "migraciones pendientes"</h3>
+<p>Significa que se subió una versión nueva pero no se crearon sus tablas. Vuelve a correr <code>bash deploy.sh</code>.</p>
+
+<h2>12. Buenas prácticas</h2>
+<ul>
+    <li><strong>Datos de prueba:</strong> antes de trabajar con clientes reales, bórralos y cambia la contraseña del admin. Los usuarios de prueba usan claves conocidas (Demo123456).</li>
+    <li><strong>Un usuario por persona.</strong> Así el historial dice quién hizo cada cambio.</li>
+    <li><strong>Personal que se va:</strong> desactívalo en lugar de eliminarlo.</li>
+    <li><strong>Tipo de cambio:</strong> mantenlo al día. Cada RO nueva toma el valor del día en que se crea.</li>
+    <li><strong>Proveedores con correo:</strong> pide a Operaciones que registre a las agencias de aduana y a los transportistas con su correo, para que funcione la pre-alerta.</li>
+    <li><strong>Contactos de avisos:</strong> revisa que cada cliente tenga marcados los contactos que deben recibir los correos.</li>
+</ul>
+
+<h2>13. Usuarios de prueba</h2>
+<table class="small">
+    <tr><th>Usuario</th><th>Contraseña</th><th>Rol</th></tr>
+    <tr><td>admin</td><td>cambiar123</td><td>Administrador / Gerente</td></tr>
+    <tr><td>juan_comercial · ana_comercial</td><td>Demo123456</td><td>Comercial</td></tr>
+    <tr><td>maria_customer · diego_customer</td><td>Demo123456</td><td>Customer Service</td></tr>
+    <tr><td>carla_operaciones · luis_operaciones</td><td>Demo123456</td><td>Operaciones</td></tr>
+</table>
+<p class="small muted">Para borrar los datos de prueba y dejar solo al administrador, en el hosting: <code>php artisan migrate:fresh --force</code>, luego <code>php artisan db:seed --class=AdminUserSeeder --force</code> y <code>php artisan optimize</code>. <strong>Borra toda la base de datos</strong>: úsalo solo antes de cargar información real.</p>
+
+</body>
+</html>

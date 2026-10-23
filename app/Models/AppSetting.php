@@ -24,7 +24,22 @@ class AppSetting extends Model
         'alerta_horas_escalamiento',
         'alerta_dias_retraso_eta',
         'alerta_horas_prealerta',
+        // Datos de la empresa para los documentos (cotizaciones)
+        'empresa_ruc',
+        'empresa_direccion',
+        'empresa_telefono',
+        'empresa_correo',
+        'empresa_web',
+        'cuentas_bancarias',
+        'cotizacion_condiciones',
+        'cotizacion_validez_dias',
     ];
+
+    /** Condiciones por defecto de las cotizaciones (se editan en Configuracion). */
+    public const QUOTATION_CONDITIONS = "Validez: 7 días calendario. Sujeto a variaciones tarifarias (GRI, BAF, etc.) y disponibilidad de equipo/espacio.\n\n"
+        ."Pesos/Medidas: Tarifas en base al peso/volumen declarado (relación W/M). Aplica solo para carga general (Dry).\n\n"
+        ."Exclusiones: NO incluye impuestos aduaneros, seguro de carga, gastos por aforos físicos, ni sobrestadía/almacenaje (Demurrage/Detention).\n\n"
+        ."Responsabilidad: FORCEX LOGISTICS actúa como Agente de Carga. Se recomienda contratar seguro puerta a puerta.";
 
     /** Umbrales por defecto de las alertas criticas (iguales a la migracion). */
     public const ALERT_DEFAULTS = [
@@ -47,6 +62,7 @@ class AppSetting extends Model
             'alerta_horas_escalamiento' => 'integer',
             'alerta_dias_retraso_eta' => 'integer',
             'alerta_horas_prealerta' => 'integer',
+            'cotizacion_validez_dias' => 'integer',
         ];
     }
 
@@ -100,7 +116,21 @@ class AppSetting extends Model
             'logo_path' => null,
             'color_primario' => BrandPalette::DEFAULT_PRIMARY,
             'color_acento' => BrandPalette::DEFAULT_ACCENT,
+            'cotizacion_condiciones' => self::QUOTATION_CONDITIONS,
+            'cotizacion_validez_dias' => 7,
         ];
+    }
+
+    /** Linea de datos de la empresa para el encabezado de los documentos. */
+    public function companyDocumentLine(): string
+    {
+        return collect([
+            filled($this->empresa_ruc) ? 'RUC '.$this->empresa_ruc : null,
+            $this->empresa_direccion,
+            $this->empresa_telefono,
+            $this->empresa_correo,
+            $this->empresa_web,
+        ])->filter(fn ($part) => filled($part))->join(' · ');
     }
 
     /** Variables CSS de la marca de esta empresa (ver BrandPalette). */

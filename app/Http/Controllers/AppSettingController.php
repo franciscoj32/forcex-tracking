@@ -44,6 +44,15 @@ class AppSettingController extends Controller
             'alerta_dias_retraso_eta' => ['required', 'integer', 'between:1,30'],
             // Pre-alerta de llegada: horas antes de la ETA (amarilla); roja desde la critica.
             'alerta_horas_prealerta' => ['required', 'integer', 'between:12,240', 'gt:alerta_horas_critica'],
+            // Datos de la empresa que se imprimen en las cotizaciones.
+            'empresa_ruc' => ['nullable', 'digits:11'],
+            'empresa_direccion' => ['nullable', 'string', 'max:255'],
+            'empresa_telefono' => ['nullable', 'string', 'max:60'],
+            'empresa_correo' => ['nullable', 'email', 'max:255'],
+            'empresa_web' => ['nullable', 'string', 'max:255'],
+            'cuentas_bancarias' => ['nullable', 'string', 'max:2000'],
+            'cotizacion_condiciones' => ['nullable', 'string', 'max:5000'],
+            'cotizacion_validez_dias' => ['required', 'integer', 'between:1,180'],
         ], [
             'alerta_horas_critica.lt' => 'La alerta roja debe empezar después de la amarilla (menos horas).',
             'alerta_horas_prealerta.gt' => 'La pre-alerta debe pedirse antes de que la alerta se ponga roja (más horas que la roja).',
@@ -57,6 +66,14 @@ class AppSettingController extends Controller
             'alerta_horas_critica' => 'horas de la alerta roja',
             'alerta_horas_escalamiento' => 'horas para escalar al Administrador',
             'alerta_dias_retraso_eta' => 'días de retraso de ETA',
+            'empresa_ruc' => 'RUC de la empresa',
+            'empresa_direccion' => 'dirección de la empresa',
+            'empresa_telefono' => 'teléfono de la empresa',
+            'empresa_correo' => 'correo de la empresa',
+            'empresa_web' => 'página web',
+            'cuentas_bancarias' => 'cuentas bancarias',
+            'cotizacion_condiciones' => 'condiciones de las cotizaciones',
+            'cotizacion_validez_dias' => 'días de validez de las cotizaciones',
         ]);
 
         $data['color_primario'] = strtoupper($data['color_primario']);

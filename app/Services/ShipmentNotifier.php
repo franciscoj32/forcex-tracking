@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Jobs\SendTrackingMail;
 use App\Models\Client;
 use App\Models\NotificationLog;
+use App\Models\Quotation;
 use App\Models\Shipment;
 use App\Models\ShipmentDateChange;
 use App\Models\User;
 use App\Support\MailSubject;
+use App\Support\Money;
 use Illuminate\Support\Collection;
 
 /**
@@ -19,6 +21,7 @@ use Illuminate\Support\Collection;
  *   B2 Cambio aprobado           -> contactos del cliente (aviso de reprogramacion)
  *   C  Tarja / ingreso a almacen -> contactos del cliente + Customer
  *   P  Pre-alerta de llegada     -> cliente + agencia de aduana, transportista (los elige el Customer)
+ *   Q  Cotizacion (PDF adjunto)  -> correos que elige el Comercial (Reply-To del Comercial)
  *   +  Nota del Customer, cliente pendiente de aprobacion, alertas diarias
  *
  * Los correos al cliente llevan Reply-To del Customer asignado: si el cliente
@@ -266,6 +269,39 @@ class ShipmentNotifier
         foreach ($externalEmails as $email) {
             $this->queue($shipment, 'pre_alerta', [$email], $operational, $sender->id);
         }
+    }
+
+    /**
+     * Cotizacion enviada por correo con el PDF adjunto (guardado en el disco
+     * privado). Si el cliente responde, le escribe al Comercial que cotizo.
+     */
+    public function quotationSent(Quotation $quotation, User $sender, array $emails, ?string $note, string $pdfPath): void
+    {
+        $quotation->loadMissing(['comercial', 'items']);
+        $comercial = $quotation->comercial ?? $sender;
+        $service = trim($quotation->cargoLabel().($quotation->incoterm ? " · {$quotation->incoterm}" : ''));
+
+        $this->dispatch(['client_id' => $quotation->client_id], 'cotizacion', $emails, [
+            'subject' => MailSubject::general("Cotización {$quotation->numero}", [trim($quotation->cargoLabel().' '.$quotation->routeLabel())]),
+            'heading' => 'Te enviamos tu cotización',
+            'intro' => "Adjuntamos en PDF la cotización {$quotation->numero} para {$quotation->razon_social}.",
+            'lines' => array_values(array_filter([
+                ['Cotización', $quotation->numero],
+                ['Servicio', $service],
+                $quotation->routeLabel() !== '' ? ['Ruta', $quotation->routeLabel()] : null,
+                $quotation->mercancia ? ['Mercancía', $quotation->mercancia] : null,
+                ['Total', Money::formatTotals($quotation->grandTotals())],
+                ['Válida hasta', $quotation->validUntil()->format('d/m/Y')],
+            ])),
+            'attachments' => [[
+                'path' => $pdfPath,
+                'name' => $quotation->pdfFileName(),
+                'mime' => 'application/pdf',
+            ]],
+            'note' => $note,
+            'note_label' => $comercial->name,
+            'footer' => "Para consultas o para confirmar, responde este correo: te atenderá {$comercial->name}.",
+        ] + $this->replyToCustomer($comercial), $sender->id);
     }
 
     /** Nota del Customer enviada por correo al cliente. */

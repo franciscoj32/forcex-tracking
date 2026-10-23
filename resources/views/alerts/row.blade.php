@@ -11,8 +11,8 @@
     $compact ??= false;
     $shipment = $alert->shipment;
     $canConfirmCutOff = $alert->type === Alert::CUT_OFF && auth()->user()->can('confirmCutOff', $shipment);
-    // Pre-alerta: el Customer de la RO (o el Admin) la prepara; el Operador solo la ve.
-    $canSendPreAlert = $alert->type === Alert::PRE_ARRIVAL && auth()->user()->can('sendPreAlert', $shipment);
+    // La pre-alerta de quien puede enviarla no pasa por aqui: tiene su propio aviso
+    // (alerts.pre-alert-trigger). Aqui solo la ve, informativa, el Operador.
 @endphp
 
 @if ($compact)
@@ -27,9 +27,6 @@
                         @csrf
                         <button type="submit" class="fx-btn-link-primary">Marcar cut-off cumplido</button>
                     </form>
-                @endif
-                @if ($canSendPreAlert)
-                    <a href="{{ route('embarques.pre-alerta', $shipment) }}" class="fx-btn-link-primary mt-0.5 block">Preparar pre-alerta</a>
                 @endif
             </div>
         </div>
@@ -114,11 +111,7 @@
                             <button type="submit" class="fx-btn-secondary h-8 px-3 text-xs">Reactivar</button>
                         </form>
                     @endif
-                    @if ($canSendPreAlert)
-                        <a href="{{ route('embarques.pre-alerta', $shipment) }}" class="fx-btn-primary h-8 whitespace-nowrap px-3 text-xs">Preparar pre-alerta</a>
-                    @else
-                        <a href="{{ route('embarques.show', $shipment) }}" class="fx-btn-primary h-8 px-3 text-xs">Abrir</a>
-                    @endif
+                    <a href="{{ route('embarques.show', $shipment) }}" class="fx-btn-primary h-8 px-3 text-xs">Abrir</a>
                 </div>
             @endif
         </div>

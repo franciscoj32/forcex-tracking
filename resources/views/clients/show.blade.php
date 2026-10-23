@@ -12,6 +12,9 @@
 
     <x-slot name="actions">
         <a href="{{ route('embarques.index', ['client_id' => $client->id, 'vista' => 'todos']) }}" class="fx-btn-secondary hidden sm:inline-flex">Ver embarques</a>
+        @can('create', \App\Models\Quotation::class)
+            <a href="{{ route('cotizaciones.create', ['client_id' => $client->id]) }}" class="fx-btn-secondary">Cotizar</a>
+        @endcan
         @can('update', $client)
             <a href="{{ route('clientes.edit', $client) }}" class="fx-btn-secondary">Editar</a>
         @endcan

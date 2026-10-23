@@ -42,6 +42,29 @@ class PreAlertService
         return null;
     }
 
+    /**
+     * Todo lo que necesita el formulario de la pre-alerta (pagina completa o
+     * ventana emergente de la ficha y del Inicio).
+     */
+    public function formData(Shipment $shipment): array
+    {
+        $shipment->loadMissing(['client', 'customerService:id,name,email', 'containers']);
+        $suppliers = $this->supplierOptions($shipment);
+
+        return [
+            'shipment' => $shipment,
+            'blockReason' => $this->blockReason($shipment),
+            'pendingEtaChange' => $this->pendingEtaChange($shipment),
+            'clientEmails' => $shipment->clientRecipientEmails(),
+            'suppliers' => $suppliers,
+            'missingSuppliers' => $this->missingKeySuppliers($suppliers),
+            'documents' => $this->documentOptions($shipment),
+            'credit' => $this->creditSummary($shipment),
+            'history' => $shipment->preAlerts()->with('user:id,name')->limit(10)->get(),
+            'maxAttachmentMb' => intdiv(ShipmentPreAlert::MAX_ATTACHMENT_BYTES, 1024 * 1024),
+        ];
+    }
+
     public function pendingEtaChange(Shipment $shipment): ?ShipmentDateChange
     {
         return $shipment->pendingDateChanges()->where('campo', 'fecha_eta')->first();
